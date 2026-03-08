@@ -3,7 +3,7 @@ import '../models/transaction_model.dart';
 import '../core/database/database_helper.dart';
 
 class HomeScreen extends StatefulWidget {
-  HomeScreen({Key? key}) : super(key: key);
+  const HomeScreen({super.key});
 
   @override
   HomeScreenState createState() => HomeScreenState();
@@ -210,7 +210,7 @@ class HomeScreenState extends State<HomeScreen> {
           children: [
             Expanded(
               child: DropdownButtonFormField<int>(
-                value: _selectedMonth,
+                initialValue: _selectedMonth,
                 items: List.generate(12, (index) {
                   return DropdownMenuItem(
                     value: index + 1,
@@ -234,7 +234,7 @@ class HomeScreenState extends State<HomeScreen> {
             SizedBox(width: 10),
             Expanded(
               child: DropdownButtonFormField<int>(
-                value: _selectedYear,
+                initialValue: _selectedYear,
                 items: [2024, 2025, 2026]
                     .map(
                       (year) => DropdownMenuItem(
@@ -410,7 +410,7 @@ class HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               );
-            }).toList(),
+            }),
           ],
         );
       }).toList(),

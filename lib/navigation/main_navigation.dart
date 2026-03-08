@@ -3,8 +3,11 @@ import '../screens/home_sreen.dart';
 import '../screens/expense_screen.dart';
 import '../screens/add_transaction_sheet.dart';
 import '../screens/income_screen.dart';
+import '../screens/organization_screen.dart';
 
 class MainNavigation extends StatefulWidget {
+  const MainNavigation({super.key});
+
   @override
   _MainNavigationState createState() => _MainNavigationState();
 }
@@ -18,6 +21,7 @@ class _MainNavigationState extends State<MainNavigation> {
     HomeScreen(key: homeKey),
     ExpenseScreen(),
     IncomeScreen(),
+    OrganizationScreen(),
   ];
 
   void _changePage(int index) {
@@ -80,7 +84,10 @@ class _MainNavigationState extends State<MainNavigation> {
                 onPressed: () => _changePage(2),
               ),
 
-              IconButton(icon: Icon(Icons.folder), onPressed: () {}),
+              IconButton(
+                icon: Icon(Icons.folder),
+                onPressed: () => _changePage(3),
+              ),
             ],
           ),
         ),

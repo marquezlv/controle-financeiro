@@ -3,6 +3,8 @@ import '../core/database/database_helper.dart';
 import '../models/transaction_model.dart';
 
 class AddTransactionSheet extends StatefulWidget {
+  const AddTransactionSheet({super.key});
+
   @override
   _AddTransactionSheetState createState() => _AddTransactionSheetState();
 }
@@ -127,7 +129,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
               SizedBox(height: 15),
 
               DropdownButtonFormField<int>(
-                value: selectedCategoryId,
+                initialValue: selectedCategoryId,
                 decoration: InputDecoration(
                   labelText: "Categoria",
                   border: OutlineInputBorder(

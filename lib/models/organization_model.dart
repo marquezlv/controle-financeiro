@@ -5,6 +5,7 @@ class OrganizationModel {
   final String description;
   final DateTime createdAt;
   final bool completed;
+  final int? color;
 
   OrganizationModel({
     this.id,
@@ -13,6 +14,7 @@ class OrganizationModel {
     required this.description,
     required this.createdAt,
     required this.completed,
+    this.color,
   });
 
   Map<String, dynamic> toMap() {
@@ -23,6 +25,7 @@ class OrganizationModel {
       'description': description,
       'createdAt': createdAt.toIso8601String(),
       'completed': completed ? 1 : 0,
+      'color': color,
     };
   }
 
@@ -34,6 +37,7 @@ class OrganizationModel {
       description: map['description'] ?? '',
       createdAt: DateTime.parse(map['createdAt']),
       completed: map['completed'] == 1,
+      color: map.containsKey('color') ? map['color'] as int? : null,
     );
   }
 }

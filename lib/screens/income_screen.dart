@@ -3,6 +3,8 @@ import '../models/transaction_model.dart';
 import '../core/database/database_helper.dart';
 
 class IncomeScreen extends StatefulWidget {
+  const IncomeScreen({super.key});
+
   @override
   _IncomeScreenState createState() => _IncomeScreenState();
 }
@@ -186,7 +188,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
           children: [
             Expanded(
               child: DropdownButtonFormField<int>(
-                value: _selectedMonth,
+                initialValue: _selectedMonth,
                 items: List.generate(12, (index) {
                   return DropdownMenuItem(
                     value: index + 1,
@@ -212,7 +214,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
 
             Expanded(
               child: DropdownButtonFormField<int>(
-                value: _selectedYear,
+                initialValue: _selectedYear,
                 items: [2025, 2026]
                     .map(
                       (year) => DropdownMenuItem(
@@ -291,7 +293,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
               : (entry.value / _totalIncome) * 100;
 
           return _categoryItem(entry.key, percent);
-        }).toList(),
+        }),
       ],
     );
   }
@@ -369,7 +371,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
                   ),
                 ),
               );
-            }).toList(),
+            }),
           ],
         );
       }).toList(),

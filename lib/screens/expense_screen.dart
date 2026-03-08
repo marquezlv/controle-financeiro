@@ -3,6 +3,8 @@ import '../models/transaction_model.dart';
 import '../core/database/database_helper.dart';
 
 class ExpenseScreen extends StatefulWidget {
+  const ExpenseScreen({super.key});
+
   @override
   _ExpenseScreenState createState() => _ExpenseScreenState();
 }
@@ -186,7 +188,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
           children: [
             Expanded(
               child: DropdownButtonFormField<int>(
-                value: _selectedMonth,
+                initialValue: _selectedMonth,
                 items: List.generate(12, (index) {
                   return DropdownMenuItem(
                     value: index + 1,
@@ -212,7 +214,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
 
             Expanded(
               child: DropdownButtonFormField<int>(
-                value: _selectedYear,
+                initialValue: _selectedYear,
                 items: [2025, 2026]
                     .map(
                       (year) => DropdownMenuItem(
@@ -289,7 +291,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
           double percent = (entry.value / _totalExpense) * 100;
 
           return _categoryItem(entry.key, percent);
-        }).toList(),
+        }),
       ],
     );
   }
@@ -367,7 +369,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                   ),
                 ),
               );
-            }).toList(),
+            }),
           ],
         );
       }).toList(),
