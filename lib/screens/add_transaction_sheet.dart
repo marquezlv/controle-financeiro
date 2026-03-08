@@ -3,7 +3,9 @@ import '../core/database/database_helper.dart';
 import '../models/transaction_model.dart';
 
 class AddTransactionSheet extends StatefulWidget {
-  const AddTransactionSheet({super.key});
+  final VoidCallback? onSaved;
+
+  const AddTransactionSheet({super.key, this.onSaved});
 
   @override
   _AddTransactionSheetState createState() => _AddTransactionSheetState();
@@ -50,6 +52,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       ),
     );
 
+    widget.onSaved?.call();
     Navigator.pop(context);
   }
 

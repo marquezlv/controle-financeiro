@@ -14,13 +14,15 @@ class MainNavigation extends StatefulWidget {
 
 class _MainNavigationState extends State<MainNavigation> {
   final GlobalKey<HomeScreenState> homeKey = GlobalKey<HomeScreenState>();
+  final GlobalKey<ExpenseScreenState> expenseKey = GlobalKey<ExpenseScreenState>();
+  final GlobalKey<IncomeScreenState> incomeKey = GlobalKey<IncomeScreenState>();
 
   int _currentIndex = 0;
 
   late final List<Widget> _screens = [
     HomeScreen(key: homeKey),
-    ExpenseScreen(),
-    IncomeScreen(),
+    ExpenseScreen(key: expenseKey),
+    IncomeScreen(key: incomeKey),
     OrganizationScreen(),
   ];
 
@@ -38,12 +40,19 @@ class _MainNavigationState extends State<MainNavigation> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
       ),
       builder: (context) {
-        return AddTransactionSheet();
+        return AddTransactionSheet(
+          onSaved: () {
+            if (_currentIndex == 0) {
+              homeKey.currentState?.loadTransactions();
+            } else if (_currentIndex == 1) {
+              expenseKey.currentState?.reload();
+            } else if (_currentIndex == 2) {
+              incomeKey.currentState?.reload();
+            }
+          },
+        );
       },
     );
-
-    // Atualiza a home
-    homeKey.currentState?.loadTransactions();
   }
 
   @override

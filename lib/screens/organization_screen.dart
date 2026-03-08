@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/database/database_helper.dart';
 import '../models/organization_model.dart';
 import '../models/transaction_model.dart';
+import '../utils/formatters.dart';
 
 class OrganizationScreen extends StatefulWidget {
   const OrganizationScreen({super.key});
@@ -174,9 +175,7 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
   }
 
   String _formatCurrency(double value) {
-    final isNegative = value < 0;
-    final formatted = value.abs().toStringAsFixed(2);
-    return 'R\$ ${isNegative ? '-' : ''}$formatted';
+    return formatCurrency(value);
   }
 
   @override
@@ -559,7 +558,7 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
               TextField(
                 controller: _nameController,
                 decoration: const InputDecoration(
-                  hintText: 'Ex: Viagem, Custos de casa',
+                  hintText: 'Ex: Viagem, Comprar casa, Carro, etc.',
                   border: OutlineInputBorder(),
                   isDense: true,
                 ),

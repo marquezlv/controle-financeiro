@@ -1,15 +1,18 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import '../models/transaction_model.dart';
 import '../core/database/database_helper.dart';
+import '../utils/formatters.dart';
 
 class IncomeScreen extends StatefulWidget {
   const IncomeScreen({super.key});
 
   @override
-  _IncomeScreenState createState() => _IncomeScreenState();
+  IncomeScreenState createState() => IncomeScreenState();
 }
 
-class _IncomeScreenState extends State<IncomeScreen> {
+class IncomeScreenState extends State<IncomeScreen> {
   List<TransactionModel> _transactions = [];
   double _totalIncome = 0;
 
@@ -26,6 +29,10 @@ class _IncomeScreenState extends State<IncomeScreen> {
     });
 
     _calculateIncome();
+  }
+
+  Future<void> reload() async {
+    await _loadTransactions();
   }
 
   void _calculateIncome() {
@@ -260,7 +267,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
           SizedBox(height: 10),
 
           Text(
-            "R\$ ${_totalIncome.toStringAsFixed(2)}",
+            formatCurrency(_totalIncome),
             style: TextStyle(
               fontSize: 30,
               fontWeight: FontWeight.bold,
@@ -277,28 +284,56 @@ class _IncomeScreenState extends State<IncomeScreen> {
       return Text("Nenhum ganho no período");
     }
 
+    final entries = _categoryTotals.entries.toList();
+    final palette = [
+      Colors.green,
+      Colors.blue,
+      Colors.orange,
+      Colors.purple,
+      Colors.teal,
+      Colors.red,
+      Colors.indigo,
+      Colors.yellow.shade700,
+    ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          "Ganhos por Categoria",
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        Center(
+          child: Text(
+            "Ganhos por Categoria",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
         ),
 
         SizedBox(height: 20),
 
-        ..._categoryTotals.entries.map((entry) {
+        Center(
+          child: _categoryPieChart(
+            values: entries.map((e) => e.value).toList(),
+            colors: List.generate(entries.length,
+                (index) => palette[index % palette.length]),
+          ),
+        ),
+
+        SizedBox(height: 20),
+
+        ...entries.asMap().entries.map((mapEntry) {
+          final index = mapEntry.key;
+          final entry = mapEntry.value;
+          final color = palette[index % palette.length];
+
           double percent = (_totalIncome == 0)
               ? 0
               : (entry.value / _totalIncome) * 100;
 
-          return _categoryItem(entry.key, percent);
+          return _categoryItem(entry.key, percent, color);
         }),
       ],
     );
   }
 
-  Widget _categoryItem(String category, double percent) {
+  Widget _categoryItem(String category, double percent, Color color) {
     return Container(
       margin: EdgeInsets.only(bottom: 10),
       padding: EdgeInsets.all(16),
@@ -309,11 +344,24 @@ class _IncomeScreenState extends State<IncomeScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(category, style: TextStyle(fontWeight: FontWeight.w500)),
+          Row(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              SizedBox(width: 10),
+              Text(category, style: TextStyle(fontWeight: FontWeight.w500)),
+            ],
+          ),
 
           Text(
             "${percent.toStringAsFixed(1)}%",
-            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+            style: TextStyle(fontWeight: FontWeight.bold, color: color),
           ),
         ],
       ),
@@ -363,7 +411,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
                       : null,
 
                   trailing: Text(
-                    "R\$ ${item.quantity.toStringAsFixed(2)}",
+                    formatCurrency(item.quantity),
                     style: TextStyle(
                       color: Colors.green,
                       fontWeight: FontWeight.bold,
@@ -377,4 +425,59 @@ class _IncomeScreenState extends State<IncomeScreen> {
       }).toList(),
     );
   }
+
+  Widget _categoryPieChart({
+    required List<double> values,
+    required List<Color> colors,
+    double size = 160,
+  }) {
+    final total = values.fold<double>(0, (prev, val) => prev + val);
+
+    if (total == 0) {
+      return Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        child: Text(
+          'Sem dados',
+          style: TextStyle(color: Colors.grey[600]),
+        ),
+      );
+    }
+
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(
+        painter: _PieChartPainter(values: values, colors: colors),
+      ),
+    );
+  }
+}
+
+class _PieChartPainter extends CustomPainter {
+  final List<double> values;
+  final List<Color> colors;
+
+  _PieChartPainter({required this.values, required this.colors});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final paint = Paint()..style = PaintingStyle.fill;
+
+    final total = values.fold<double>(0, (prev, val) => prev + val);
+    if (total == 0) return;
+
+    double startAngle = -pi / 2;
+    for (var i = 0; i < values.length; i++) {
+      final sweep = (values[i] / total) * 2 * pi;
+      paint.color = colors[i % colors.length];
+      canvas.drawArc(rect, startAngle, sweep, true, paint);
+      startAngle += sweep;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
