@@ -1,9 +1,12 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import '../models/transaction_model.dart';
 import '../core/database/database_helper.dart';
 import '../utils/formatters.dart';
+import '../widgets/amount_card.dart';
+import '../widgets/category_pie_chart.dart';
+import '../widgets/month_year_selector.dart';
+import '../widgets/section_title.dart';
+import '../widgets/transaction_tile.dart';
 
 class ExpenseScreen extends StatefulWidget {
   const ExpenseScreen({super.key});
@@ -184,97 +187,34 @@ class ExpenseScreenState extends State<ExpenseScreen> {
   }
 
   Widget _buildMonthSelector() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text("Selecionar Mês", style: TextStyle(fontWeight: FontWeight.w500)),
-
-        SizedBox(height: 10),
-
-        Row(
-          children: [
-            Expanded(
-              child: DropdownButtonFormField<int>(
-                initialValue: _selectedMonth,
-                items: List.generate(12, (index) {
-                  return DropdownMenuItem(
-                    value: index + 1,
-                    child: Text(_months[index]),
-                  );
-                }),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedMonth = value!;
-                  });
-
-                  _calculateExpenses();
-                },
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-
-            SizedBox(width: 10),
-
-            Expanded(
-              child: DropdownButtonFormField<int>(
-                initialValue: _selectedYear,
-                items: [2025, 2026]
-                    .map(
-                      (year) => DropdownMenuItem(
-                        value: year,
-                        child: Text(year.toString()),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedYear = value!;
-                  });
-                  _calculateExpenses();
-                },
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
+    return MonthYearSelector(
+      selectedMonth: _selectedMonth,
+      selectedYear: _selectedYear,
+      months: _months,
+      years: [2025, 2026],
+      onMonthChanged: (value) {
+        if (value == null) return;
+        setState(() {
+          _selectedMonth = value;
+        });
+        _calculateExpenses();
+      },
+      onYearChanged: (value) {
+        if (value == null) return;
+        setState(() {
+          _selectedYear = value;
+        });
+        _calculateExpenses();
+      },
     );
   }
 
   Widget _buildTotalExpenseCard() {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFFFF6B6B), Color(0xFFE53935)],
-        ),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text("Gasto Total", style: TextStyle(color: Colors.white70)),
-
-          SizedBox(height: 10),
-
-          Text(
-            formatCurrency(_totalExpense),
-            style: TextStyle(
-              fontSize: 30,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-        ],
+    return AmountCard(
+      title: 'Gasto Total',
+      amount: formatCurrency(_totalExpense),
+      gradient: LinearGradient(
+        colors: [Color(0xFFFF6B6B), Color(0xFFE53935)],
       ),
     );
   }
@@ -299,17 +239,12 @@ class ExpenseScreenState extends State<ExpenseScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Center(
-          child: Text(
-            "Gastos por Categoria",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-        ),
+        Center(child: SectionTitle(title: "Gastos por Categoria")),
 
         SizedBox(height: 20),
 
         Center(
-          child: _categoryPieChart(
+          child: CategoryPieChart(
             values: entries.map((e) => e.value).toList(),
             colors: List.generate(entries.length,
                 (index) => palette[index % palette.length]),
@@ -396,86 +331,12 @@ class ExpenseScreenState extends State<ExpenseScreen> {
             SizedBox(height: 10),
 
             ...transactions.map((item) {
-              return Card(
-                margin: EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  title: Text(
-                    item.categoryName ?? "Categoria",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-
-                  subtitle: item.description.isNotEmpty
-                      ? Text(item.description)
-                      : null,
-
-                  trailing: Text(
-                    formatCurrency(item.quantity),
-                    style: TextStyle(
-                      color: Colors.red,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              );
+              return TransactionTile(transaction: item);
             }),
           ],
         );
       }).toList(),
     );
   }
-
-  Widget _categoryPieChart({
-    required List<double> values,
-    required List<Color> colors,
-    double size = 160,
-  }) {
-    final total = values.fold<double>(0, (prev, val) => prev + val);
-
-    if (total == 0) {
-      return Container(
-        width: size,
-        height: size,
-        alignment: Alignment.center,
-        child: Text(
-          'Sem dados',
-          style: TextStyle(color: Colors.grey[600]),
-        ),
-      );
-    }
-
-    return SizedBox(
-      width: size,
-      height: size,
-      child: CustomPaint(
-        painter: _PieChartPainter(values: values, colors: colors),
-      ),
-    );
-  }
 }
 
-class _PieChartPainter extends CustomPainter {
-  final List<double> values;
-  final List<Color> colors;
-
-  _PieChartPainter({required this.values, required this.colors});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final paint = Paint()..style = PaintingStyle.fill;
-
-    final total = values.fold<double>(0, (prev, val) => prev + val);
-    if (total == 0) return;
-
-    double startAngle = -pi / 2;
-    for (var i = 0; i < values.length; i++) {
-      final sweep = (values[i] / total) * 2 * pi;
-      paint.color = colors[i % colors.length];
-      canvas.drawArc(rect, startAngle, sweep, true, paint);
-      startAngle += sweep;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
-}

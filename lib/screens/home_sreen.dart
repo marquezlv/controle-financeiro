@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import '../models/transaction_model.dart';
 import '../core/database/database_helper.dart';
 import '../utils/formatters.dart';
+import '../widgets/amount_card.dart';
+import '../widgets/month_year_selector.dart';
+import '../widgets/section_title.dart';
+import '../widgets/transaction_tile.dart';
+import '../widgets/year_bar_chart.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -159,9 +164,15 @@ class HomeScreenState extends State<HomeScreen> {
                     _buildIncomeExpenseRow(),
                     if (_showYearView) ...[
                       SizedBox(height: 20),
-                      _buildYearChart(),
+                      YearBarChart(
+                        incomeTotals: _yearIncomeTotals,
+                        expenseTotals: _yearExpenseTotals,
+                        monthLabels: _months,
+                      ),
                     ],
                     SizedBox(height: 30),
+                    SectionTitle(title: 'Transações'),
+                    SizedBox(height: 20),
                     _buildTransactionSection(),
                   ],
                 ),
@@ -262,94 +273,35 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildMonthSelector() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text("Selecionar Mês", style: TextStyle(fontWeight: FontWeight.w500)),
-        SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: DropdownButtonFormField<int>(
-                initialValue: _selectedMonth,
-                items: List.generate(12, (index) {
-                  return DropdownMenuItem(
-                    value: index + 1,
-                    child: Text(_months[index]),
-                  );
-                }),
-                onChanged: _showYearView
-                    ? null
-                    : (value) {
-                        setState(() {
-                          _selectedMonth = value!;
-                        });
-
-                        _calculateTotals();
-                      },
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-            SizedBox(width: 10),
-            Expanded(
-              child: DropdownButtonFormField<int>(
-                initialValue: _selectedYear,
-                items: [2024, 2025, 2026]
-                    .map(
-                      (year) => DropdownMenuItem(
-                        value: year,
-                        child: Text(year.toString()),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedYear = value!;
-                  });
-
-                  _calculateTotals();
-                },
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
+    return MonthYearSelector(
+      selectedMonth: _selectedMonth,
+      selectedYear: _selectedYear,
+      disableMonth: _showYearView,
+      months: _months,
+      years: [2024, 2025, 2026],
+      onMonthChanged: (value) {
+        if (value == null) return;
+        setState(() {
+          _selectedMonth = value;
+        });
+        _calculateTotals();
+      },
+      onYearChanged: (value) {
+        if (value == null) return;
+        setState(() {
+          _selectedYear = value;
+        });
+        _calculateTotals();
+      },
     );
   }
 
   Widget _buildBalanceCard() {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF2F6BFF), Color(0xFF1E4ED8)],
-        ),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text("Saldo Total", style: TextStyle(color: Colors.white70)),
-          SizedBox(height: 10),
-          Text(
-            formatCurrency(_balance),
-            style: TextStyle(
-              fontSize: 30,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-        ],
+    return AmountCard(
+      title: 'Saldo Total',
+      amount: formatCurrency(_balance),
+      gradient: LinearGradient(
+        colors: [Color(0xFF2F6BFF), Color(0xFF1E4ED8)],
       ),
     );
   }
@@ -358,178 +310,25 @@ class HomeScreenState extends State<HomeScreen> {
     return Row(
       children: [
         Expanded(
-          child: _smallCard(
-            "Ganhos",
-            formatCurrency(_totalIncome),
-            Colors.green,
+          child: AmountCard(
+            title: 'Ganhos',
+            amount: formatCurrency(_totalIncome),
+            backgroundColor: Colors.white,
+            amountColor: Colors.green,
+            amountFontSize: 20,
           ),
         ),
         SizedBox(width: 10),
         Expanded(
-          child: _smallCard(
-            "Gastos",
-            formatCurrency(_totalExpense),
-            Colors.red,
+          child: AmountCard(
+            title: 'Gastos',
+            amount: formatCurrency(_totalExpense),
+            backgroundColor: Colors.white,
+            amountColor: Colors.red,
+            amountFontSize: 20,
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildYearChart() {
-    final maxValue = [
-      ..._yearIncomeTotals,
-      ..._yearExpenseTotals,
-    ].fold<double>(0, (prev, val) => val > prev ? val : prev);
-
-    if (maxValue == 0) {
-      return Container(
-        width: double.infinity,
-        padding: EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Center(
-          child: Text(
-            'Sem dados para o ano selecionado',
-            style: TextStyle(color: Colors.grey[600]),
-          ),
-        ),
-      );
-    }
-
-    final availableHeight = MediaQuery.of(context).size.height * 0.25;
-    final chartHeight = availableHeight.clamp(160.0, 220.0).toDouble();
-    final barMaxHeight = chartHeight - 30;
-
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Resumo anual',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          SizedBox(height: 12),
-          SizedBox(
-            height: chartHeight,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                // Y axis labels
-                Container(
-                  width: 40,
-                  height: chartHeight,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        maxValue.toStringAsFixed(0),
-                        style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-                      ),
-                      Text(
-                        (maxValue * 0.66).toStringAsFixed(0),
-                        style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-                      ),
-                      Text(
-                        (maxValue * 0.33).toStringAsFixed(0),
-                        style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-                      ),
-                      Text(
-                        '0',
-                        style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: List.generate(12, (index) {
-                        final income = _yearIncomeTotals[index];
-                        final expense = _yearExpenseTotals[index];
-
-                        final double incomeHeight =
-                            maxValue > 0 ? (income / maxValue) * barMaxHeight : 0.0;
-                        final double expenseHeight =
-                            maxValue > 0 ? (expense / maxValue) * barMaxHeight : 0.0;
-
-                        return Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 6),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Container(
-                                    width: 10,
-                                    height: incomeHeight,
-                                    decoration: BoxDecoration(
-                                      color: Colors.green,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                  ),
-                                  SizedBox(width: 4),
-                                  Container(
-                                    width: 10,
-                                    height: expenseHeight,
-                                    decoration: BoxDecoration(
-                                      color: Colors.red,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              SizedBox(height: 8),
-                              Text(
-                                _months[index].substring(0, 3),
-                                style: TextStyle(fontSize: 10, color: Colors.black87),
-                              ),
-                            ],
-                          ),
-                        );
-                      }),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _smallCard(String title, String value, Color color) {
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title),
-          SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(fontWeight: FontWeight.bold, color: color),
-          ),
-        ],
-      ),
     );
   }
 
@@ -537,30 +336,20 @@ class HomeScreenState extends State<HomeScreen> {
     final grouped = _groupTransactionsByDate();
 
     if (_getFilteredTransactions().isEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Transações",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          SizedBox(height: 20),
-          Center(
-            child: Column(
-              children: [
-                Text(
-                  "Nenhuma transação ainda",
-                  style: TextStyle(color: Colors.grey),
-                ),
-                SizedBox(height: 5),
-                Text(
-                  "Adicione sua primeira transação",
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ],
+      return Center(
+        child: Column(
+          children: [
+            Text(
+              "Nenhuma transação ainda",
+              style: TextStyle(color: Colors.grey),
             ),
-          ),
-        ],
+            SizedBox(height: 5),
+            Text(
+              "Adicione sua primeira transação",
+              style: TextStyle(color: Colors.grey),
+            ),
+          ],
+        ),
       );
     }
 
@@ -587,28 +376,7 @@ class HomeScreenState extends State<HomeScreen> {
             SizedBox(height: 10),
 
             ...transactions.map((item) {
-              return Card(
-                margin: EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  title: Text(
-                    item.categoryName ?? "Categoria",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-
-                  subtitle: item.description.isNotEmpty
-                      ? Text(item.description)
-                      : null,
-                  trailing: Text(
-                    formatCurrency(item.quantity),
-                    style: TextStyle(
-                      color: item.type == TransactionType.expense
-                          ? Colors.red
-                          : Colors.green,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              );
+              return TransactionTile(transaction: item);
             }),
           ],
         );
