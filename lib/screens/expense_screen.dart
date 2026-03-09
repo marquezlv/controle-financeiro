@@ -38,6 +38,17 @@ class ExpenseScreenState extends State<ExpenseScreen> {
     await _loadTransactions();
   }
 
+  Future<void> _deleteTransaction(TransactionModel transaction) async {
+    if (transaction.installmentGroupId != null) {
+      await DatabaseHelper.instance
+          .deleteTransactionGroup(transaction.installmentGroupId!);
+    } else if (transaction.id != null) {
+      await DatabaseHelper.instance.deleteTransaction(transaction.id!);
+    }
+
+    await _loadTransactions();
+  }
+
   void _calculateExpenses() {
     double total = 0;
 
@@ -191,7 +202,9 @@ class ExpenseScreenState extends State<ExpenseScreen> {
       selectedMonth: _selectedMonth,
       selectedYear: _selectedYear,
       months: _months,
-      years: [2025, 2026],
+      minYear: DateTime.now().year,
+      maxYear: DateTime.now().year + 1,
+      useYearPicker: true,
       onMonthChanged: (value) {
         if (value == null) return;
         setState(() {
@@ -331,7 +344,10 @@ class ExpenseScreenState extends State<ExpenseScreen> {
             SizedBox(height: 10),
 
             ...transactions.map((item) {
-              return TransactionTile(transaction: item);
+              return TransactionTile(
+                transaction: item,
+                onDelete: () => _deleteTransaction(item),
+              );
             }),
           ],
         );

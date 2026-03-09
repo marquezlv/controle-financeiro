@@ -8,6 +8,13 @@ class TransactionModel {
   int categoryId;
   DateTime date;
   TransactionType type;
+
+  /// Installment metadata
+  bool isInstallment;
+  int? installmentNumber;
+  int? totalInstallments;
+  String? installmentGroupId;
+
   String? categoryName;
 
   TransactionModel({
@@ -18,6 +25,10 @@ class TransactionModel {
     required this.categoryId,
     required this.date,
     required this.type,
+    this.isInstallment = false,
+    this.installmentNumber,
+    this.totalInstallments,
+    this.installmentGroupId,
     this.categoryName,
   });
 
@@ -30,6 +41,10 @@ class TransactionModel {
       'categoryId': categoryId,
       'date': date.toIso8601String(),
       'type': type.name,
+      'isInstallment': isInstallment ? 1 : 0,
+      'installmentNumber': installmentNumber,
+      'totalInstallments': totalInstallments,
+      'installmentGroupId': installmentGroupId,
     };
   }
 
@@ -44,6 +59,10 @@ class TransactionModel {
       type: map['type'] == 'income'
           ? TransactionType.income
           : TransactionType.expense,
+      isInstallment: (map['isInstallment'] ?? 0) == 1,
+      installmentNumber: map['installmentNumber'] as int?,
+      totalInstallments: map['totalInstallments'] as int?,
+      installmentGroupId: map['installmentGroupId'] as String?,
       categoryName: map['categoryName'], // 👈 MUITO IMPORTANTE
     );
   }

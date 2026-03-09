@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import '../models/transaction_model.dart';
 import '../core/database/database_helper.dart';
@@ -39,6 +41,15 @@ class HomeScreenState extends State<HomeScreen> {
     "Novembro",
     "Dezembro",
   ];
+
+  int get _maxYear {
+    final currentYear = DateTime.now().year;
+    final maxFromTransactions = _transactions.fold<int>(
+      currentYear,
+      (prev, t) => max(prev, t.date.year),
+    );
+    return max(currentYear, maxFromTransactions);
+  }
 
   List<double> _yearIncomeTotals = List.filled(12, 0);
   List<double> _yearExpenseTotals = List.filled(12, 0);
@@ -82,12 +93,25 @@ class HomeScreenState extends State<HomeScreen> {
     double incomeYear = 0;
     double expenseYear = 0;
 
+    double balanceIncome = 0;
+    double balanceExpense = 0;
+
     final yearIncomeTotals = List<double>.filled(12, 0);
     final yearExpenseTotals = List<double>.filled(12, 0);
 
-    for (var transaction in _transactions) {
-      final isSameYear = transaction.date.year == _selectedYear;
+    final now = DateTime.now();
 
+    for (var transaction in _transactions) {
+      final isPastOrToday = !transaction.date.isAfter(now);
+      if (isPastOrToday) {
+        if (transaction.type == TransactionType.income) {
+          balanceIncome += transaction.quantity;
+        } else {
+          balanceExpense += transaction.quantity;
+        }
+      }
+
+      final isSameYear = transaction.date.year == _selectedYear;
       if (isSameYear) {
         final monthIndex = transaction.date.month - 1;
 
@@ -113,15 +137,14 @@ class HomeScreenState extends State<HomeScreen> {
     setState(() {
       _yearIncomeTotals = yearIncomeTotals;
       _yearExpenseTotals = yearExpenseTotals;
+      _balance = balanceIncome - balanceExpense;
 
       if (_showYearView) {
         _totalIncome = incomeYear;
         _totalExpense = expenseYear;
-        _balance = incomeYear - expenseYear;
       } else {
         _totalIncome = incomeMonth;
         _totalExpense = expenseMonth;
-        _balance = incomeMonth - expenseMonth;
       }
     });
   }
@@ -257,7 +280,8 @@ class HomeScreenState extends State<HomeScreen> {
           decoration: BoxDecoration(
             color: backgroundColor,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white.withOpacity(0.3)),
+            border: Border.all(color: Colors.white.withValues(alpha: 76)),
+
           ),
           alignment: Alignment.center,
           child: Text(
@@ -276,9 +300,11 @@ class HomeScreenState extends State<HomeScreen> {
     return MonthYearSelector(
       selectedMonth: _selectedMonth,
       selectedYear: _selectedYear,
-      disableMonth: _showYearView,
       months: _months,
-      years: [2024, 2025, 2026],
+      minYear: DateTime.now().year,
+      maxYear: _maxYear,
+      useYearPicker: true,
+      disableMonth: _showYearView,
       onMonthChanged: (value) {
         if (value == null) return;
         setState(() {
@@ -332,6 +358,17 @@ class HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _deleteTransaction(TransactionModel transaction) async {
+    if (transaction.installmentGroupId != null) {
+      await DatabaseHelper.instance
+          .deleteTransactionGroup(transaction.installmentGroupId!);
+    } else if (transaction.id != null) {
+      await DatabaseHelper.instance.deleteTransaction(transaction.id!);
+    }
+
+    await loadTransactions();
+  }
+
   Widget _buildTransactionSection() {
     final grouped = _groupTransactionsByDate();
 
@@ -376,7 +413,10 @@ class HomeScreenState extends State<HomeScreen> {
             SizedBox(height: 10),
 
             ...transactions.map((item) {
-              return TransactionTile(transaction: item);
+              return TransactionTile(
+                transaction: item,
+                onDelete: () => _deleteTransaction(item),
+              );
             }),
           ],
         );

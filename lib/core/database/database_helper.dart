@@ -23,7 +23,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -36,6 +36,13 @@ class DatabaseHelper {
 
     if (oldVersion < 4) {
       await db.execute('ALTER TABLE categories ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0');
+    }
+
+    if (oldVersion < 5) {
+      await db.execute('ALTER TABLE transactions ADD COLUMN isInstallment INTEGER NOT NULL DEFAULT 0');
+      await db.execute('ALTER TABLE transactions ADD COLUMN installmentNumber INTEGER');
+      await db.execute('ALTER TABLE transactions ADD COLUMN totalInstallments INTEGER');
+      await db.execute('ALTER TABLE transactions ADD COLUMN installmentGroupId TEXT');
     }
   }
 
@@ -58,6 +65,10 @@ class DatabaseHelper {
     categoryId INTEGER,
     date TEXT NOT NULL,
     type TEXT NOT NULL,
+    isInstallment INTEGER NOT NULL DEFAULT 0,
+    installmentNumber INTEGER,
+    totalInstallments INTEGER,
+    installmentGroupId TEXT,
     FOREIGN KEY (categoryId) REFERENCES categories (id)
   )
   ''');
@@ -87,6 +98,17 @@ class DatabaseHelper {
   Future<int> insertTransaction(TransactionModel transaction) async {
     final db = await instance.database;
     return await db.insert('transactions', transaction.toMap());
+  }
+
+  Future<int> deleteTransaction(int id) async {
+    final db = await instance.database;
+    return await db.delete('transactions', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<int> deleteTransactionGroup(String groupId) async {
+    final db = await instance.database;
+    return await db.delete('transactions',
+        where: 'installmentGroupId = ?', whereArgs: [groupId]);
   }
 
   Future<List<TransactionModel>> getAllTransactions() async {

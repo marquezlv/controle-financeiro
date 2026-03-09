@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import '../core/database/database_helper.dart';
 import '../models/transaction_model.dart';
@@ -16,7 +18,13 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   TransactionType _type = TransactionType.expense;
   final TextEditingController _valueController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
+  final TextEditingController _installmentsController = TextEditingController();
   int? selectedCategoryId;
+
+  // Parcelamento
+  bool _isInstallment = false;
+  int _installments = 2;
+  int _startDay = min(DateTime.now().day, 28);
 
   Future<void> loadCategories() async {
     final data = await DatabaseHelper.instance.getCategories(_type.name);
@@ -34,23 +42,91 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   void initState() {
     super.initState();
     loadCategories();
+    _installmentsController.text = _installments.toString();
+  }
+
+  @override
+  void dispose() {
+    _valueController.dispose();
+    _descController.dispose();
+    _installmentsController.dispose();
+    super.dispose();
+  }
+
+  DateTime _addMonths(DateTime date, int months) {
+    final year = date.year + ((date.month - 1 + months) ~/ 12);
+    final month = ((date.month - 1 + months) % 12) + 1;
+    final lastDayOfMonth = DateTime(year, month + 1, 0).day;
+    final day = min(date.day, lastDayOfMonth);
+    return DateTime(
+      year,
+      month,
+      day,
+      date.hour,
+      date.minute,
+      date.second,
+      date.millisecond,
+      date.microsecond,
+    );
   }
 
   Future<void> _save() async {
     if (_valueController.text.isEmpty) return;
 
-    await DatabaseHelper.instance.insertTransaction(
-      TransactionModel(
-        name: _descController.text.isEmpty
-            ? 'Sem descrição'
-            : _descController.text,
-        quantity: double.parse(_valueController.text),
-        description: _descController.text,
-        categoryId: selectedCategoryId ?? 1,
-        date: DateTime.now(),
-        type: _type,
-      ),
-    );
+    final value = double.tryParse(_valueController.text.replaceAll(',', '.'));
+    if (value == null) return;
+
+    final name = _descController.text.isEmpty ? 'Sem descrição' : _descController.text;
+    final categoryId = selectedCategoryId ?? 1;
+    final now = DateTime.now();
+
+    DateTime firstDate = DateTime(now.year, now.month, _startDay);
+    if (firstDate.isBefore(now)) {
+      firstDate = _addMonths(firstDate, 1);
+    }
+
+    if (_isInstallment && _installments > 1) {
+      final baseValue = value / _installments;
+      final installmentValue = double.parse(baseValue.toStringAsFixed(2));
+      final lastInstallmentValue = double.parse(
+        (value - installmentValue * (_installments - 1)).toStringAsFixed(2),
+      );
+
+      final groupId = '${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(9999)}';
+
+      for (var i = 1; i <= _installments; i++) {
+        final installmentDate = _addMonths(firstDate, i - 1);
+        final amount = i == _installments ? lastInstallmentValue : installmentValue;
+
+        await DatabaseHelper.instance.insertTransaction(
+          TransactionModel(
+            name: name,
+            quantity: amount,
+            description: _descController.text,
+            categoryId: categoryId,
+            date: installmentDate,
+            type: _type,
+            isInstallment: true,
+            installmentNumber: i,
+            totalInstallments: _installments,
+            installmentGroupId: groupId,
+          ),
+        );
+      }
+    } else {
+      await DatabaseHelper.instance.insertTransaction(
+        TransactionModel(
+          name: name,
+          quantity: value,
+          description: _descController.text,
+          categoryId: categoryId,
+          date: now,
+          type: _type,
+        ),
+      );
+    }
+
+    if (!mounted) return;
 
     widget.onSaved?.call();
     Navigator.pop(context);
@@ -159,7 +235,72 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 decoration: InputDecoration(labelText: "Descrição"),
               ),
 
-              SizedBox(height: 25),
+              SizedBox(height: 15),
+
+              CheckboxListTile(
+                value: _isInstallment,
+                onChanged: (value) {
+                  setState(() {
+                    _isInstallment = value ?? false;
+                  });
+                },
+                title: Text('Parcelado'),
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+              ),
+
+              if (_isInstallment) ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _installmentsController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: "Meses",
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onChanged: (value) {
+                          final parsed = int.tryParse(value);
+                          if (parsed != null && parsed > 0) {
+                            setState(() {
+                              _installments = parsed;
+                            });
+                          }
+                        },
+                      ),
+                    ),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        initialValue: _startDay,
+                        decoration: InputDecoration(
+                          labelText: "Dia de início",
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        items: List.generate(28, (index) => index + 1)
+                            .map((day) => DropdownMenuItem<int>(
+                                  value: day,
+                                  child: Text(day.toString()),
+                                ))
+                            .toList(),
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() {
+                            _startDay = value;
+                          });
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+
+                SizedBox(height: 25),
+              ],
 
               ElevatedButton(
                 style: ElevatedButton.styleFrom(

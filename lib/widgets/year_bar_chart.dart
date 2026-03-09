@@ -63,7 +63,7 @@ class YearBarChart extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 // Y axis labels
-                Container(
+                SizedBox(
                   width: 40,
                   height: chartHeight,
                   child: Column(
