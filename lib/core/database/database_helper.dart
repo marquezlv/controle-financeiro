@@ -23,7 +23,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
       onOpen: (db) async {
@@ -61,6 +61,13 @@ class DatabaseHelper {
     await db.execute(
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_categories_name_type ON categories(name, type)',
     );
+
+    final orgInfo = await db.rawQuery("PRAGMA table_info(organizations)");
+    final orgCols = orgInfo.map((r) => r['name'] as String).toSet();
+
+    if (!orgCols.contains('installments')) {
+      await db.execute('ALTER TABLE organizations ADD COLUMN installments INTEGER NOT NULL DEFAULT 1');
+    }
   }
 
   Future<void> _ensureDefaultCategories(Database db) async {
@@ -101,6 +108,10 @@ class DatabaseHelper {
     if (oldVersion < 6) {
       await db.execute('ALTER TABLE categories ADD COLUMN color INTEGER NOT NULL DEFAULT 0xFF2196F3');
     }
+
+    if (oldVersion < 7) {
+      await db.execute('ALTER TABLE organizations ADD COLUMN installments INTEGER NOT NULL DEFAULT 1');
+    }
   }
 
   Future _createDB(Database db, int version) async {
@@ -139,7 +150,8 @@ class DatabaseHelper {
     description TEXT,
     createdAt TEXT NOT NULL,
     completed INTEGER NOT NULL,
-    color INTEGER
+    color INTEGER,
+    installments INTEGER NOT NULL DEFAULT 1
   )
   ''');
 

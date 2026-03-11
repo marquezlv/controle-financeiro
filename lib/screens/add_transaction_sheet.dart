@@ -51,78 +51,81 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     return showDialog<int>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: Text('Nova categoria'),
-          content: StatefulBuilder(
-            builder: (context, setState) {
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: nameController,
-                    decoration: InputDecoration(labelText: 'Nome'),
-                  ),
-                  SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Cor'),
-                            SizedBox(height: 8),
-                            Container(
-                              width: double.infinity,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: Color.fromARGB(255, r, g, b),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.grey.shade300),
+        return Padding(
+          padding: MediaQuery.of(context).viewInsets,
+          child: AlertDialog(
+            title: Text('Nova categoria'),
+            content: StatefulBuilder(
+              builder: (context, setState) {
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      decoration: InputDecoration(labelText: 'Nome'),
+                    ),
+                    SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Cor'),
+                              SizedBox(height: 8),
+                              Container(
+                                width: double.infinity,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: Color.fromARGB(255, r, g, b),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.grey.shade300),
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 12),
-                  _buildColorSlider('R', r, (value) => setState(() => r = value)),
-                  _buildColorSlider('G', g, (value) => setState(() => g = value)),
-                  _buildColorSlider('B', b, (value) => setState(() => b = value)),
-                ],
-              );
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(null),
-              child: Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final name = nameController.text.trim();
-                if (name.isEmpty) return;
-
-                final navigator = Navigator.of(context);
-                final colorValue = (0xFF << 24) | (r << 16) | (g << 8) | b;
-
-                if (categoryId != null) {
-                  await DatabaseHelper.instance
-                      .updateCategory(categoryId, name, colorValue);
-                  navigator.pop(categoryId);
-                  return;
-                }
-
-                final newId = await DatabaseHelper.instance.insertCategory(
-                  name,
-                  _type.name,
-                  colorValue,
+                      ],
+                    ),
+                    SizedBox(height: 12),
+                    _buildColorSlider('R', r, (value) => setState(() => r = value)),
+                    _buildColorSlider('G', g, (value) => setState(() => g = value)),
+                    _buildColorSlider('B', b, (value) => setState(() => b = value)),
+                  ],
                 );
-                navigator.pop(newId);
               },
-              child: Text('Salvar'),
             ),
-          ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(null),
+                child: Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  final name = nameController.text.trim();
+                  if (name.isEmpty) return;
+
+                  final navigator = Navigator.of(context);
+                  final colorValue = (0xFF << 24) | (r << 16) | (g << 8) | b;
+
+                  if (categoryId != null) {
+                    await DatabaseHelper.instance
+                        .updateCategory(categoryId, name, colorValue);
+                    navigator.pop(categoryId);
+                    return;
+                  }
+
+                  final newId = await DatabaseHelper.instance.insertCategory(
+                    name,
+                    _type.name,
+                    colorValue,
+                  );
+                  navigator.pop(newId);
+                },
+                child: Text('Salvar'),
+              ),
+            ],
+          ),
         );
       },
     );
@@ -201,17 +204,24 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     }
 
     if (_isInstallment && _installments > 1) {
-      final baseValue = value / _installments;
-      final installmentValue = double.parse(baseValue.toStringAsFixed(2));
-      final lastInstallmentValue = double.parse(
-        (value - installmentValue * (_installments - 1)).toStringAsFixed(2),
-      );
+      double? installmentValue;
+      double? lastInstallmentValue;
+
+      if (_type == TransactionType.expense) {
+        final baseValue = value / _installments;
+        installmentValue = double.parse(baseValue.toStringAsFixed(2));
+        lastInstallmentValue = double.parse(
+          (value - installmentValue * (_installments - 1)).toStringAsFixed(2),
+        );
+      }
 
       final groupId = '${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(9999)}';
 
       for (var i = 1; i <= _installments; i++) {
         final installmentDate = _addMonths(firstDate, i - 1);
-        final amount = i == _installments ? lastInstallmentValue : installmentValue;
+        final amount = _type == TransactionType.expense
+            ? (i == _installments ? lastInstallmentValue! : installmentValue!)
+            : value;
 
         await DatabaseHelper.instance.insertTransaction(
           TransactionModel(
@@ -448,7 +458,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                     _isInstallment = value ?? false;
                   });
                 },
-                title: Text('Parcelado'),
+                title: Text(_type == TransactionType.income ? 'Recorrente' : 'Parcelado'),
                 contentPadding: EdgeInsets.zero,
                 controlAffinity: ListTileControlAffinity.leading,
               ),

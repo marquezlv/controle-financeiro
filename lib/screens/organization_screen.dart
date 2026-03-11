@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import '../core/database/database_helper.dart';
 import '../models/organization_model.dart';
@@ -14,6 +16,7 @@ class OrganizationScreen extends StatefulWidget {
 class _OrganizationScreenState extends State<OrganizationScreen> {
   final _nameController = TextEditingController();
   final _valueController = TextEditingController();
+  final TextEditingController _installmentsController = TextEditingController(text: '2');
 
   final List<Color> _palette = const [
     Color(0xFFEF4444),
@@ -30,11 +33,20 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
   List<OrganizationModel> _organizations = [];
   double _currentBalance = 0;
   double _reservedTotal = 0;
+  int _maxInstallments = 1;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _valueController.dispose();
+    _installmentsController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -61,6 +73,7 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
   void _calculateBalance() {
     double income = 0;
     double expense = 0;
+    int maxInstallments = 1;
 
     for (var t in _transactions) {
       if (t.type == TransactionType.income) {
@@ -68,10 +81,15 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
       } else {
         expense += t.quantity;
       }
+
+      if (t.totalInstallments != null && t.totalInstallments! > maxInstallments) {
+        maxInstallments = t.totalInstallments!;
+      }
     }
 
     setState(() {
       _currentBalance = income - expense;
+      _maxInstallments = maxInstallments;
     });
   }
 
@@ -90,7 +108,10 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
     _nameController.clear();
     _valueController.clear();
 
-    int selectedColorIndex = 0;
+    Color selectedColor = _palette.first;
+    bool isInstallment = false;
+    int installments = 2;
+    _installmentsController.text = installments.toString();
 
     showModalBottomSheet(
       context: context,
@@ -106,11 +127,20 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
           child: StatefulBuilder(
             builder: (context, setModalState) {
               return _buildCreateModal(
-                selectedColorIndex,
-                (newIndex) => setModalState(() {
-                  selectedColorIndex = newIndex;
+                selectedColor: selectedColor,
+                isInstallment: isInstallment,
+                installments: installments,
+                onColorChanged: (color) => setModalState(() {
+                  selectedColor = color;
                 }),
-                () => _createProjection(selectedColorIndex),
+                onInstallmentToggle: (value) => setModalState(() {
+                  isInstallment = value;
+                }),
+                onInstallmentsChanged: (value) => setModalState(() {
+                  installments = value;
+                  _installmentsController.text = value.toString();
+                }),
+                onCreate: () => _createProjection(selectedColor, installments),
               );
             },
           ),
@@ -119,7 +149,7 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
     );
   }
 
-  void _createProjection(int selectedColorIndex) async {
+  void _createProjection(Color selectedColor, int installments) async {
     final name = _nameController.text.trim();
     final value =
         double.tryParse(_valueController.text.replaceAll(',', '.')) ?? 0;
@@ -137,30 +167,88 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
       description: '',
       createdAt: DateTime.now(),
       completed: false,
-      color: _palette[selectedColorIndex].toARGB32(),
+      color: selectedColor.toARGB32(),
+      installments: installments,
     );
 
     await DatabaseHelper.instance.insertOrganization(org);
+
+    final categoryId = await DatabaseHelper.instance
+        .getOrCreateCategory(name, TransactionType.expense.name);
+    await DatabaseHelper.instance
+        .updateCategory(categoryId, name, selectedColor.toARGB32());
+
     if (!mounted) return;
     await _loadOrganizations();
     if (!mounted) return;
     Navigator.of(context).pop();
   }
 
+  DateTime _addMonths(DateTime date, int months) {
+    final year = date.year + ((date.month - 1 + months) ~/ 12);
+    final month = ((date.month - 1 + months) % 12) + 1;
+    final lastDayOfMonth = DateTime(year, month + 1, 0).day;
+    final day = min(date.day, lastDayOfMonth);
+    return DateTime(
+      year,
+      month,
+      day,
+      date.hour,
+      date.minute,
+      date.second,
+      date.millisecond,
+      date.microsecond,
+    );
+  }
+
   Future<void> _completeAndRegisterExpense(OrganizationModel org) async {
     final categoryId = await DatabaseHelper.instance
         .getOrCreateCategory(org.name, TransactionType.expense.name);
 
-    await DatabaseHelper.instance.insertTransaction(
-      TransactionModel(
-        name: org.name,
-        quantity: org.quantity,
-        description: org.description,
-        categoryId: categoryId,
-        date: DateTime.now(),
-        type: TransactionType.expense,
-      ),
-    );
+    final now = DateTime.now();
+    final totalInstallments = org.installments > 1 ? org.installments : 1;
+
+    if (totalInstallments > 1) {
+      final baseValue = org.quantity / totalInstallments;
+      final installmentValue = double.parse(baseValue.toStringAsFixed(2));
+      final lastInstallmentValue = double.parse(
+        (org.quantity - installmentValue * (totalInstallments - 1))
+            .toStringAsFixed(2),
+      );
+      final groupId = '${now.millisecondsSinceEpoch}-${Random().nextInt(9999)}';
+
+      for (var i = 1; i <= totalInstallments; i++) {
+        final installmentDate = _addMonths(now, i - 1);
+        final amount =
+            i == totalInstallments ? lastInstallmentValue : installmentValue;
+
+        await DatabaseHelper.instance.insertTransaction(
+          TransactionModel(
+            name: org.name,
+            quantity: amount,
+            description: org.description,
+            categoryId: categoryId,
+            date: installmentDate,
+            type: TransactionType.expense,
+            isInstallment: true,
+            installmentNumber: i,
+            totalInstallments: totalInstallments,
+            installmentGroupId: groupId,
+          ),
+        );
+      }
+    } else {
+      await DatabaseHelper.instance.insertTransaction(
+        TransactionModel(
+          name: org.name,
+          quantity: org.quantity,
+          description: org.description,
+          categoryId: categoryId,
+          date: now,
+          type: TransactionType.expense,
+        ),
+      );
+    }
 
     if (org.id != null) {
       await DatabaseHelper.instance.deleteOrganization(org.id!);
@@ -263,8 +351,7 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
         children: [
           Expanded(
             child: _buildBalanceItem(
-              icon: Icons.account_balance_wallet_outlined,
-              title: 'Saldo atual',
+              title: 'Saldo em $_maxInstallments ${_maxInstallments == 1 ? 'mês' : 'meses'}',
               value: _formatCurrency(_currentBalance),
               valueColor: _currentBalance < 0 ? Colors.red : Colors.green,
             ),
@@ -272,7 +359,6 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
           const SizedBox(width: 12),
           Expanded(
             child: _buildBalanceItem(
-              icon: Icons.show_chart,
               title: 'Saldo após',
               value: _formatCurrency(afterBalance),
               valueColor: afterBalance < 0 ? Colors.red : Colors.green,
@@ -284,7 +370,7 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
   }
 
   Widget _buildBalanceItem({
-    required IconData icon,
+    IconData? icon,
     required String title,
     required String value,
     required Color valueColor,
@@ -294,16 +380,24 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
       children: [
         Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEEF2FF),
-                borderRadius: BorderRadius.circular(12),
+            if (icon != null) ...[
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEEF2FF),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, size: 18, color: const Color(0xFF2F6BFF)),
               ),
-              child: Icon(icon, size: 18, color: const Color(0xFF2F6BFF)),
+              const SizedBox(width: 10),
+            ],
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-            const SizedBox(width: 10),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
           ],
         ),
         const SizedBox(height: 12),
@@ -380,7 +474,8 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
   Widget _buildOrganizationCard(OrganizationModel org, double afterBalance) {
     final color = org.color != null ? Color(org.color!) : _palette.first;
     final reserveValue = org.quantity;
-    final balanceAfterReserve = _currentBalance - reserveValue;
+    final months = org.installments > 1 ? org.installments : 1;
+    final monthlyValue = reserveValue / months;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 18),
@@ -478,18 +573,16 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Saldo após reserva',
+                      'Por mês',
                       style: TextStyle(color: Colors.grey),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _formatCurrency(balanceAfterReserve),
-                      style: TextStyle(
+                      _formatCurrency(monthlyValue),
+                      style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: balanceAfterReserve < 0
-                            ? Colors.red
-                            : Colors.green,
+                        color: Colors.green,
                       ),
                     ),
                   ],
@@ -518,17 +611,50 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
     );
   }
 
-  Widget _buildCreateModal(
-    int selectedColorIndex,
-    void Function(int) onColorSelected,
-    VoidCallback onCreate,
-  ) {
-    final previewColor = _palette[selectedColorIndex];
+  Widget _buildCreateModal({
+    required Color selectedColor,
+    required bool isInstallment,
+    required int installments,
+    required ValueChanged<Color> onColorChanged,
+    required ValueChanged<bool> onInstallmentToggle,
+    required ValueChanged<int> onInstallmentsChanged,
+    required VoidCallback onCreate,
+  }) {
+    final previewColor = selectedColor;
     final previewName = _nameController.text.trim().isEmpty
         ? 'Nome da Projeção'
         : _nameController.text.trim();
     final previewValue =
         double.tryParse(_valueController.text.replaceAll(',', '.')) ?? 0;
+    final perMonthValue =
+        previewValue / (isInstallment && installments > 0 ? installments : 1);
+
+    Widget buildSlider(String label, int value, ValueChanged<int> onChanged) {
+      return Row(
+        children: [
+          SizedBox(
+            width: 18,
+            child: Text(label),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Slider(
+              value: value.toDouble(),
+              min: 0,
+              max: 255,
+              divisions: 255,
+              label: value.toString(),
+              onChanged: (v) => onChanged(v.toInt()),
+            ),
+          ),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 34,
+            child: Text(value.toString()),
+          ),
+        ],
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
@@ -579,36 +705,51 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
               const SizedBox(height: 16),
               const Text('Cor da Categoria'),
               const SizedBox(height: 10),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: List.generate(_palette.length, (index) {
-                  final color = _palette[index];
-                  final selected = index == selectedColorIndex;
-                  return GestureDetector(
-                    onTap: () => onColorSelected(index),
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: color,
-                        borderRadius: BorderRadius.circular(12),
-                        border: selected
-                            ? Border.all(color: Colors.white, width: 3)
-                            : null,
-                        boxShadow: [
-                          if (selected)
-                            BoxShadow(
-                              color: Colors.black.withAlpha((0.2 * 255).round()),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                }),
+              Container(
+                width: double.infinity,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: selectedColor,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
               ),
+              const SizedBox(height: 12),
+              buildSlider('R', selectedColor.red, (value) {
+                onColorChanged(Color.fromARGB(255, value, selectedColor.green, selectedColor.blue));
+              }),
+              buildSlider('G', selectedColor.green, (value) {
+                onColorChanged(Color.fromARGB(255, selectedColor.red, value, selectedColor.blue));
+              }),
+              buildSlider('B', selectedColor.blue, (value) {
+                onColorChanged(Color.fromARGB(255, selectedColor.red, selectedColor.green, value));
+              }),
+              const SizedBox(height: 12),
+              CheckboxListTile(
+                value: isInstallment,
+                onChanged: (value) => onInstallmentToggle(value ?? false),
+                title: const Text('Parcelado'),
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+              ),
+              if (isInstallment) ...[
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _installmentsController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Meses',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  onChanged: (value) {
+                    final parsed = int.tryParse(value);
+                    if (parsed != null && parsed > 0) {
+                      onInstallmentsChanged(parsed);
+                    }
+                  },
+                ),
+              ],
               const SizedBox(height: 20),
               const Text('Preview'),
               const SizedBox(height: 10),
@@ -625,43 +766,55 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
                     ),
                   ],
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: previewColor.withAlpha((0.2 * 255).round()),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Container(
-                          width: 16,
-                          height: 16,
+                    Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
                           decoration: BoxDecoration(
-                            color: previewColor,
+                            color: previewColor.withAlpha((0.2 * 255).round()),
                             shape: BoxShape.circle,
                           ),
+                          child: Center(
+                            child: Container(
+                              width: 16,
+                              height: 16,
+                              decoration: BoxDecoration(
+                                color: previewColor,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            previewName,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                previewName,
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _formatCurrency(previewValue),
+                                style: TextStyle(color: previewColor),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _formatCurrency(previewValue),
-                            style: TextStyle(color: previewColor),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
+                    if (isInstallment) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        'Por mês: ${_formatCurrency(perMonthValue)}',
+                        style: TextStyle(color: previewColor),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -692,3 +845,4 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
     );
   }
 }
+
