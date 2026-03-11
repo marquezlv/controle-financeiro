@@ -16,6 +16,7 @@ class TransactionModel {
   String? installmentGroupId;
 
   String? categoryName;
+  int? categoryColor;
 
   TransactionModel({
     this.id,
@@ -30,6 +31,7 @@ class TransactionModel {
     this.totalInstallments,
     this.installmentGroupId,
     this.categoryName,
+    this.categoryColor,
   });
 
   Map<String, dynamic> toMap() {
@@ -64,6 +66,7 @@ class TransactionModel {
       totalInstallments: map['totalInstallments'] as int?,
       installmentGroupId: map['installmentGroupId'] as String?,
       categoryName: map['categoryName'], // 👈 MUITO IMPORTANTE
+      categoryColor: map['categoryColor'] as int?,
     );
   }
 }

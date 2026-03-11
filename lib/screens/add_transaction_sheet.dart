@@ -32,10 +32,125 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     setState(() {
       categories = data;
 
-      if (categories.isNotEmpty) {
+      if (categories.isNotEmpty && selectedCategoryId == null) {
         selectedCategoryId = categories.first['id'];
       }
     });
+  }
+
+  Future<int?> _showAddCategoryDialog({
+    String initialName = '',
+    int initialColor = 0xFF2196F3,
+    int? categoryId,
+  }) async {
+    final nameController = TextEditingController(text: initialName);
+    int r = (initialColor >> 16) & 0xFF;
+    int g = (initialColor >> 8) & 0xFF;
+    int b = initialColor & 0xFF;
+
+    return showDialog<int>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Nova categoria'),
+          content: StatefulBuilder(
+            builder: (context, setState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: InputDecoration(labelText: 'Nome'),
+                  ),
+                  SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Cor'),
+                            SizedBox(height: 8),
+                            Container(
+                              width: double.infinity,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: Color.fromARGB(255, r, g, b),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.grey.shade300),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 12),
+                  _buildColorSlider('R', r, (value) => setState(() => r = value)),
+                  _buildColorSlider('G', g, (value) => setState(() => g = value)),
+                  _buildColorSlider('B', b, (value) => setState(() => b = value)),
+                ],
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(null),
+              child: Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final name = nameController.text.trim();
+                if (name.isEmpty) return;
+
+                final navigator = Navigator.of(context);
+                final colorValue = (0xFF << 24) | (r << 16) | (g << 8) | b;
+
+                if (categoryId != null) {
+                  await DatabaseHelper.instance
+                      .updateCategory(categoryId, name, colorValue);
+                  navigator.pop(categoryId);
+                  return;
+                }
+
+                final newId = await DatabaseHelper.instance.insertCategory(
+                  name,
+                  _type.name,
+                  colorValue,
+                );
+                navigator.pop(newId);
+              },
+              child: Text('Salvar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildColorSlider(String label, int value, ValueChanged<int> onChanged) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 20,
+          child: Text(label),
+        ),
+        Expanded(
+          child: Slider(
+            value: value.toDouble(),
+            min: 0,
+            max: 255,
+            divisions: 255,
+            label: value.toString(),
+            onChanged: (v) => onChanged(v.toInt()),
+          ),
+        ),
+        SizedBox(
+          width: 30,
+          child: Text(value.toString()),
+        ),
+      ],
+    );
   }
 
   @override
@@ -162,8 +277,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                       ),
                       onPressed: () {
                         setState(() {
-                          _type = TransactionType.expense;
-                        });
+                          _type = TransactionType.expense;                        selectedCategoryId = null;                        });
 
                         loadCategories();
                       },
@@ -183,8 +297,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                       ),
                       onPressed: () {
                         setState(() {
-                          _type = TransactionType.income;
-                        });
+                          _type = TransactionType.income;                        selectedCategoryId = null;                        });
 
                         loadCategories();
                       },
@@ -207,25 +320,116 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
               SizedBox(height: 15),
 
-              DropdownButtonFormField<int>(
-                initialValue: selectedCategoryId,
-                decoration: InputDecoration(
-                  labelText: "Categoria",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<int>(
+                      initialValue: selectedCategoryId,
+                      decoration: InputDecoration(
+                        labelText: "Categoria",
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      items: [
+                        ...categories.map((category) {
+                          final rawColor = category['color'];
+                          final colorValue = rawColor is int
+                              ? rawColor
+                              : int.tryParse(rawColor?.toString() ?? '')
+                                  ?? 0xFF2196F3;
+
+                          final rawId = category['id'];
+                          final categoryId = rawId is int
+                              ? rawId
+                              : int.tryParse(rawId?.toString() ?? '') ?? 0;
+
+                          return DropdownMenuItem<int>(
+                            value: categoryId,
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Color(colorValue),
+                                  ),
+                                ),
+                                SizedBox(width: 10),
+                                Text(category['name']),
+                              ],
+                            ),
+                          );
+                        }),
+                        DropdownMenuItem<int>(
+                          value: -1,
+                          child: Row(
+                            children: [
+                              Icon(Icons.add, size: 18),
+                              SizedBox(width: 10),
+                              Text('Adicionar categoria'),
+                            ],
+                          ),
+                        ),
+                      ],
+                      onChanged: (value) async {
+                        if (value == null) return;
+
+                        if (value == -1) {
+                          final newCategoryId = await _showAddCategoryDialog();
+                          if (newCategoryId != null) {
+                            await loadCategories();
+                            setState(() {
+                              selectedCategoryId = newCategoryId;
+                            });
+                          }
+                          return;
+                        }
+
+                        setState(() {
+                          selectedCategoryId = value;
+                        });
+                      },
+                    ),
                   ),
-                ),
-                items: categories.map((category) {
-                  return DropdownMenuItem<int>(
-                    value: category['id'],
-                    child: Text(category['name']),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    selectedCategoryId = value!;
-                  });
-                },
+                  if (selectedCategoryId != null)
+                    IconButton(
+                      icon: Icon(Icons.edit),
+                      tooltip: 'Editar categoria',
+                      onPressed: () async {
+                        final selected = categories.firstWhere(
+                          (c) => (c['id'] is int
+                              ? c['id']
+                              : int.tryParse(c['id']?.toString() ?? '')) ==
+                              selectedCategoryId,
+                          orElse: () => {},
+                        );
+
+                        if (selected.isEmpty) return;
+
+                        final rawColor = selected['color'];
+                        final colorValue = rawColor is int
+                            ? rawColor
+                            : int.tryParse(rawColor?.toString() ?? '') ??
+                                0xFF2196F3;
+                        final name = selected['name']?.toString() ?? '';
+
+                        final updatedId = await _showAddCategoryDialog(
+                          initialName: name,
+                          initialColor: colorValue,
+                          categoryId: selectedCategoryId,
+                        );
+
+                        if (updatedId != null) {
+                          await loadCategories();
+                          setState(() {
+                            selectedCategoryId = updatedId;
+                          });
+                        }
+                      },
+                    ),
+                ],
               ),
 
               SizedBox(height: 15),

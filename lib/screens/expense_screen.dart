@@ -20,6 +20,7 @@ class ExpenseScreenState extends State<ExpenseScreen> {
   double _totalExpense = 0;
 
   Map<String, double> _categoryTotals = {};
+  final Map<String, int> _categoryColors = {}; // store the color for each category name
 
   int _selectedMonth = DateTime.now().month;
   int _selectedYear = DateTime.now().year;
@@ -53,6 +54,7 @@ class ExpenseScreenState extends State<ExpenseScreen> {
     double total = 0;
 
     Map<String, double> categoryMap = {};
+    _categoryColors.clear();
 
     for (var transaction in _transactions) {
       if (transaction.type != TransactionType.expense) continue;
@@ -62,9 +64,11 @@ class ExpenseScreenState extends State<ExpenseScreen> {
         total += transaction.quantity;
 
         String category = transaction.categoryName ?? "Outros";
+        final colorValue = transaction.categoryColor ?? 0xFF2196F3;
 
         if (!categoryMap.containsKey(category)) {
           categoryMap[category] = 0;
+          _categoryColors[category] = colorValue;
         }
 
         categoryMap[category] = categoryMap[category]! + transaction.quantity;
@@ -258,9 +262,17 @@ class ExpenseScreenState extends State<ExpenseScreen> {
 
         Center(
           child: CategoryPieChart(
+            size: 220,
             values: entries.map((e) => e.value).toList(),
-            colors: List.generate(entries.length,
-                (index) => palette[index % palette.length]),
+            colors: List.generate(entries.length, (index) {
+              final cat = entries[index].key;
+              final colorValue = _categoryColors[cat];
+              return colorValue != null
+                  ? Color(colorValue)
+                  : palette[index % palette.length];
+            }),
+            labels: entries.map((e) => e.key).toList(),
+            centerText: formatCurrency(_totalExpense),
           ),
         ),
 
@@ -269,17 +281,19 @@ class ExpenseScreenState extends State<ExpenseScreen> {
         ...entries.asMap().entries.map((mapEntry) {
           final index = mapEntry.key;
           final entry = mapEntry.value;
-          final color = palette[index % palette.length];
+          final cat = entry.key;
+          final colorValue = _categoryColors[cat];
+          final color = colorValue != null
+              ? Color(colorValue)
+              : palette[index % palette.length];
 
-          double percent = (entry.value / _totalExpense) * 100;
-
-          return _categoryItem(entry.key, percent, color);
+          return _categoryItem(entry.key, entry.value, color);
         }),
       ],
     );
   }
 
-  Widget _categoryItem(String category, double percent, Color color) {
+  Widget _categoryItem(String category, double amount, Color color) {
     return Container(
       margin: EdgeInsets.only(bottom: 10),
       padding: EdgeInsets.all(16),
@@ -306,7 +320,7 @@ class ExpenseScreenState extends State<ExpenseScreen> {
           ),
 
           Text(
-            "${percent.toStringAsFixed(1)}%",
+            formatCurrency(amount),
             style: TextStyle(fontWeight: FontWeight.bold, color: color),
           ),
         ],

@@ -23,10 +23,63 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
+      onOpen: (db) async {
+        await _ensureRequiredColumns(db);
+        await _ensureDefaultCategories(db);
+      },
     );
+  }
+
+  Future<void> _ensureRequiredColumns(Database db) async {
+    final txInfo = await db.rawQuery("PRAGMA table_info(transactions)");
+    final txCols = txInfo.map((r) => r['name'] as String).toSet();
+
+    if (!txCols.contains('isInstallment')) {
+      await db.execute('ALTER TABLE transactions ADD COLUMN isInstallment INTEGER NOT NULL DEFAULT 0');
+    }
+    if (!txCols.contains('installmentNumber')) {
+      await db.execute('ALTER TABLE transactions ADD COLUMN installmentNumber INTEGER');
+    }
+    if (!txCols.contains('totalInstallments')) {
+      await db.execute('ALTER TABLE transactions ADD COLUMN totalInstallments INTEGER');
+    }
+    if (!txCols.contains('installmentGroupId')) {
+      await db.execute('ALTER TABLE transactions ADD COLUMN installmentGroupId TEXT');
+    }
+
+    final catInfo = await db.rawQuery("PRAGMA table_info(categories)");
+    final catCols = catInfo.map((r) => r['name'] as String).toSet();
+
+    if (!catCols.contains('color')) {
+      await db.execute('ALTER TABLE categories ADD COLUMN color INTEGER NOT NULL DEFAULT 0xFF2196F3');
+    }
+
+    // Ensure uniqueness so we can safely upsert default categories.
+    await db.execute(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_categories_name_type ON categories(name, type)',
+    );
+  }
+
+  Future<void> _ensureDefaultCategories(Database db) async {
+    // colors chosen to be distinguishable
+    final defaults = [
+      {'name': 'Mercado', 'type': 'expense', 'color': 0xFF42A5F5},
+      {'name': 'Transporte', 'type': 'expense', 'color': 0xFFFFB300},
+      {'name': 'Lazer', 'type': 'expense', 'color': 0xFFAB47BC},
+      {'name': 'Restaurante', 'type': 'expense', 'color': 0xFFE57373},
+      {'name': 'Salário', 'type': 'income', 'color': 0xFF66BB6A},
+      {'name': 'Freelance', 'type': 'income', 'color': 0xFF26A69A},
+    ];
+
+    for (var cat in defaults) {
+      await db.rawInsert(
+        'INSERT OR IGNORE INTO categories (name, type, color, hidden) VALUES (?, ?, ?, 0)',
+        [cat['name'], cat['type'], cat['color']],
+      );
+    }
   }
 
   Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
@@ -44,6 +97,10 @@ class DatabaseHelper {
       await db.execute('ALTER TABLE transactions ADD COLUMN totalInstallments INTEGER');
       await db.execute('ALTER TABLE transactions ADD COLUMN installmentGroupId TEXT');
     }
+
+    if (oldVersion < 6) {
+      await db.execute('ALTER TABLE categories ADD COLUMN color INTEGER NOT NULL DEFAULT 0xFF2196F3');
+    }
   }
 
   Future _createDB(Database db, int version) async {
@@ -52,7 +109,8 @@ class DatabaseHelper {
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     type TEXT NOT NULL,
-    hidden INTEGER NOT NULL DEFAULT 0
+    hidden INTEGER NOT NULL DEFAULT 0,
+    color INTEGER NOT NULL DEFAULT 0xFF2196F3
   )
   ''');
 
@@ -86,13 +144,37 @@ class DatabaseHelper {
   ''');
 
     // categorias padrão
-    await db.insert('categories', {'name': 'Mercado', 'type': 'expense'});
-    await db.insert('categories', {'name': 'Transporte', 'type': 'expense'});
-    await db.insert('categories', {'name': 'Lazer', 'type': 'expense'});
-    await db.insert('categories', {'name': 'Restaurante', 'type': 'expense'});
+    await db.insert('categories', {
+      'name': 'Mercado',
+      'type': 'expense',
+      'color': 0xFF2196F3, // azul
+    });
+    await db.insert('categories', {
+      'name': 'Transporte',
+      'type': 'expense',
+      'color': 0xFFFFC107, // amarelo
+    });
+    await db.insert('categories', {
+      'name': 'Lazer',
+      'type': 'expense',
+      'color': 0xFF9C27B0, // roxo
+    });
+    await db.insert('categories', {
+      'name': 'Restaurante',
+      'type': 'expense',
+      'color': 0xFFF44336, // vermelho
+    });
 
-    await db.insert('categories', {'name': 'Salário', 'type': 'income'});
-    await db.insert('categories', {'name': 'Freelance', 'type': 'income'});
+    await db.insert('categories', {
+      'name': 'Salário',
+      'type': 'income',
+      'color': 0xFF4CAF50, // verde
+    });
+    await db.insert('categories', {
+      'name': 'Freelance',
+      'type': 'income',
+      'color': 0xFF009688, // teal
+    });
   }
 
   Future<int> insertTransaction(TransactionModel transaction) async {
@@ -117,7 +199,8 @@ class DatabaseHelper {
     final result = await db.rawQuery('''
   SELECT 
     t.*,
-    c.name as categoryName
+    c.name as categoryName,
+    c.color as categoryColor
   FROM transactions t
   LEFT JOIN categories c 
   ON c.id = t.categoryId
@@ -160,6 +243,29 @@ class DatabaseHelper {
       'categories',
       where: 'type = ? AND (hidden = 0 OR hidden IS NULL)',
       whereArgs: [type],
+    );
+  }
+
+  Future<int> insertCategory(String name, String type, int color) async {
+    final db = await database;
+    return await db.insert(
+      'categories',
+      {
+        'name': name,
+        'type': type,
+        'color': color,
+        'hidden': 0,
+      },
+    );
+  }
+
+  Future<int> updateCategory(int id, String name, int color) async {
+    final db = await database;
+    return await db.update(
+      'categories',
+      {'name': name, 'color': color},
+      where: 'id = ?',
+      whereArgs: [id],
     );
   }
 
