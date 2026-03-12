@@ -5,6 +5,7 @@ import '../core/database/database_helper.dart';
 import '../models/organization_model.dart';
 import '../models/transaction_model.dart';
 import '../utils/formatters.dart';
+import '../widgets/color_picker.dart';
 
 class OrganizationScreen extends StatefulWidget {
   const OrganizationScreen({super.key});
@@ -18,16 +19,6 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
   final _valueController = TextEditingController();
   final TextEditingController _installmentsController = TextEditingController(text: '2');
 
-  final List<Color> _palette = const [
-    Color(0xFFEF4444),
-    Color(0xFFF59E0B),
-    Color(0xFF10B981),
-    Color(0xFF3B82F6),
-    Color(0xFF8B5CF6),
-    Color(0xFFEC4899),
-    Color(0xFF14B8A6),
-    Color(0xFFFB923C),
-  ];
 
   List<TransactionModel> _transactions = [];
   List<OrganizationModel> _organizations = [];
@@ -108,7 +99,11 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
     _nameController.clear();
     _valueController.clear();
 
-    Color selectedColor = _palette.first;
+    Color selectedColor = const Color(0xFF3B82F6);
+    final hexController = TextEditingController(
+      text: '#${selectedColor.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
+    );
+
     bool isInstallment = false;
     int installments = 2;
     _installmentsController.text = installments.toString();
@@ -120,30 +115,57 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
       ),
       builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: StatefulBuilder(
-            builder: (context, setModalState) {
-              return _buildCreateModal(
-                selectedColor: selectedColor,
-                isInstallment: isInstallment,
-                installments: installments,
-                onColorChanged: (color) => setModalState(() {
-                  selectedColor = color;
-                }),
-                onInstallmentToggle: (value) => setModalState(() {
-                  isInstallment = value;
-                }),
-                onInstallmentsChanged: (value) => setModalState(() {
-                  installments = value;
-                  _installmentsController.text = value.toString();
-                }),
-                onCreate: () => _createProjection(selectedColor, installments),
-              );
-            },
-          ),
+        return DraggableScrollableSheet(
+          initialChildSize: 0.75,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (context, scrollController) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: StatefulBuilder(
+                builder: (context, setModalState) {
+                  return _buildCreateModal(
+                    scrollController: scrollController,
+                    selectedColor: selectedColor,
+                      hexController: hexController,
+                      isInstallment: isInstallment,
+                      installments: installments,
+                      onColorChanged: (color) => setModalState(() {
+                        selectedColor = color;
+                        final hex = color.toARGB32()
+                            .toRadixString(16)
+                            .padLeft(8, '0')
+                            .substring(2)
+                            .toUpperCase();
+                        hexController.text = '#$hex';
+                      }),
+                      onHexChanged: (hex) {
+                        final cleaned = hex.replaceAll('#', '').trim();
+                        if (cleaned.length == 6) {
+                          final parsed = int.tryParse(cleaned, radix: 16);
+                          if (parsed != null) {
+                            setModalState(() {
+                              selectedColor = Color(0xFF000000 | parsed);
+                            });
+                          }
+                        }
+                      },
+                    onInstallmentToggle: (value) => setModalState(() {
+                      isInstallment = value;
+                    }),
+                    onInstallmentsChanged: (value) => setModalState(() {
+                      installments = value;
+                      _installmentsController.text = value.toString();
+                    }),
+                    onCreate: () => _createProjection(selectedColor, installments),
+                  );
+                },
+              ),
+            );
+          },
         );
       },
     );
@@ -472,7 +494,7 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
   }
 
   Widget _buildOrganizationCard(OrganizationModel org, double afterBalance) {
-    final color = org.color != null ? Color(org.color!) : _palette.first;
+    final color = org.color != null ? Color(org.color!) : const Color(0xFF3B82F6);
     final reserveValue = org.quantity;
     final months = org.installments > 1 ? org.installments : 1;
     final monthlyValue = reserveValue / months;
@@ -612,10 +634,13 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
   }
 
   Widget _buildCreateModal({
+    required ScrollController scrollController,
     required Color selectedColor,
+    required TextEditingController hexController,
     required bool isInstallment,
     required int installments,
     required ValueChanged<Color> onColorChanged,
+    required ValueChanged<String> onHexChanged,
     required ValueChanged<bool> onInstallmentToggle,
     required ValueChanged<int> onInstallmentsChanged,
     required VoidCallback onCreate,
@@ -629,38 +654,12 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
     final perMonthValue =
         previewValue / (isInstallment && installments > 0 ? installments : 1);
 
-    Widget buildSlider(String label, int value, ValueChanged<int> onChanged) {
-      return Row(
-        children: [
-          SizedBox(
-            width: 18,
-            child: Text(label),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Slider(
-              value: value.toDouble(),
-              min: 0,
-              max: 255,
-              divisions: 255,
-              label: value.toString(),
-              onChanged: (v) => onChanged(v.toInt()),
-            ),
-          ),
-          const SizedBox(width: 10),
-          SizedBox(
-            width: 34,
-            child: Text(value.toString()),
-          ),
-        ],
-      );
-    }
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       child: Container(
         padding: const EdgeInsets.all(16),
         child: SingleChildScrollView(
+          controller: scrollController,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -703,27 +702,19 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              const Text('Cor da Categoria'),
-              const SizedBox(height: 10),
-              Container(
-                width: double.infinity,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: selectedColor,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
+              ColorPicker(
+                color: selectedColor,
+                onColorChanged: onColorChanged,
               ),
               const SizedBox(height: 12),
-              buildSlider('R', selectedColor.red, (value) {
-                onColorChanged(Color.fromARGB(255, value, selectedColor.green, selectedColor.blue));
-              }),
-              buildSlider('G', selectedColor.green, (value) {
-                onColorChanged(Color.fromARGB(255, selectedColor.red, value, selectedColor.blue));
-              }),
-              buildSlider('B', selectedColor.blue, (value) {
-                onColorChanged(Color.fromARGB(255, selectedColor.red, selectedColor.green, value));
-              }),
+              TextField(
+                controller: hexController,
+                decoration: InputDecoration(
+                  labelText: 'Hex',
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: onHexChanged,
+              ),
               const SizedBox(height: 12),
               CheckboxListTile(
                 value: isInstallment,

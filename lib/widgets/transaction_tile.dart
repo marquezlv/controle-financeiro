@@ -5,11 +5,13 @@ import '../utils/formatters.dart';
 class TransactionTile extends StatelessWidget {
   final TransactionModel transaction;
   final VoidCallback? onDelete;
+  final VoidCallback? onTap;
 
   const TransactionTile({
     super.key,
     required this.transaction,
     this.onDelete,
+    this.onTap,
   });
 
   @override
@@ -31,6 +33,7 @@ class TransactionTile extends StatelessWidget {
     return Card(
       margin: EdgeInsets.only(bottom: 8),
       child: ListTile(
+        onTap: onTap,
         title: Text(
           title,
           style: TextStyle(fontWeight: FontWeight.bold),

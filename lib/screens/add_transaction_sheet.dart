@@ -1,13 +1,22 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../core/database/database_helper.dart';
 import '../models/transaction_model.dart';
+import '../widgets/color_picker.dart';
 
 class AddTransactionSheet extends StatefulWidget {
   final VoidCallback? onSaved;
+  final ScrollController? scrollController;
+  final TransactionModel? transaction;
 
-  const AddTransactionSheet({super.key, this.onSaved});
+  const AddTransactionSheet({
+    super.key,
+    this.onSaved,
+    this.scrollController,
+    this.transaction,
+  });
 
   @override
   _AddTransactionSheetState createState() => _AddTransactionSheetState();
@@ -20,6 +29,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _installmentsController = TextEditingController();
   int? selectedCategoryId;
+  DateTime _selectedDate = DateTime.now();
+
+  bool get isEditing => widget.transaction != null;
 
   // Parcelamento
   bool _isInstallment = false;
@@ -44,123 +56,147 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     int? categoryId,
   }) async {
     final nameController = TextEditingController(text: initialName);
-    int r = (initialColor >> 16) & 0xFF;
-    int g = (initialColor >> 8) & 0xFF;
-    int b = initialColor & 0xFF;
+    final hexController = TextEditingController(
+      text: '#${initialColor.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
+    );
 
-    return showDialog<int>(
+    int selectedColor = initialColor;
+
+
+    return showModalBottomSheet<int>(
       context: context,
+      isScrollControlled: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+      ),
       builder: (context) {
-        return Padding(
-          padding: MediaQuery.of(context).viewInsets,
-          child: AlertDialog(
-            title: Text('Nova categoria'),
-            content: StatefulBuilder(
-              builder: (context, setState) {
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: nameController,
-                      decoration: InputDecoration(labelText: 'Nome'),
-                    ),
-                    SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+        return DraggableScrollableSheet(
+          initialChildSize: 0.55,
+          minChildSize: 0.35,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (context, scrollController) {
+            return Padding(
+              padding: MediaQuery.of(context).viewInsets,
+              child: SingleChildScrollView(
+                controller: scrollController,
+                child: Padding(
+                  padding: EdgeInsets.all(20),
+                  child: StatefulBuilder(
+                    builder: (context, setState) {
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            categoryId != null ? 'Editar categoria' : 'Nova categoria',
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                          ),
+                          SizedBox(height: 20),
+                          TextField(
+                            controller: nameController,
+                            decoration: InputDecoration(labelText: 'Nome'),
+                          ),
+                          SizedBox(height: 14),
+                          ColorPicker(
+                            color: Color(selectedColor),
+                            onColorChanged: (color) {
+                              setState(() {
+                                selectedColor = color.toARGB32();
+                                final hex = color.toARGB32()
+                                    .toRadixString(16)
+                                    .padLeft(8, '0')
+                                    .substring(2)
+                                    .toUpperCase();
+                                hexController.text = '#$hex';
+                              });
+                            },
+                          ),
+                          SizedBox(height: 12),
+                          TextField(
+                            controller: hexController,
+                            decoration: InputDecoration(
+                              labelText: 'Hex',
+                              prefixText: '',
+                              border: OutlineInputBorder(),
+                            ),
+                            onChanged: (value) {
+                              final hex = value.replaceAll('#', '').trim();
+                              if (hex.length == 6) {
+                                final parsed = int.tryParse(hex, radix: 16);
+                                if (parsed != null) {
+                                  setState(() {
+                                    selectedColor = 0xFF000000 | parsed;
+                                  });
+                                }
+                              }
+                            },
+                          ),
+                          SizedBox(height: 20),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
                             children: [
-                              Text('Cor'),
-                              SizedBox(height: 8),
-                              Container(
-                                width: double.infinity,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: Color.fromARGB(255, r, g, b),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.grey.shade300),
-                                ),
+                              TextButton(
+                                onPressed: () => Navigator.of(context).pop(null),
+                                child: Text('Cancelar'),
+                              ),
+                              SizedBox(width: 16),
+                              ElevatedButton(
+                                onPressed: () async {
+                                  final name = nameController.text.trim();
+                                  if (name.isEmpty) return;
+
+                                  final navigator = Navigator.of(context);
+                                  final colorValue = selectedColor;
+
+                                  if (categoryId != null) {
+                                    await DatabaseHelper.instance
+                                        .updateCategory(categoryId, name, colorValue);
+                                    navigator.pop(categoryId);
+                                    return;
+                                  }
+
+                                  final newId = await DatabaseHelper.instance.insertCategory(
+                                    name,
+                                    _type.name,
+                                    colorValue,
+                                  );
+                                  navigator.pop(newId);
+                                },
+                                child: Text('Salvar'),
                               ),
                             ],
                           ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 12),
-                    _buildColorSlider('R', r, (value) => setState(() => r = value)),
-                    _buildColorSlider('G', g, (value) => setState(() => g = value)),
-                    _buildColorSlider('B', b, (value) => setState(() => b = value)),
-                  ],
-                );
-              },
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(null),
-                child: Text('Cancelar'),
+                        ],
+                      );
+                    },
+                  ),
+                ),
               ),
-              ElevatedButton(
-                onPressed: () async {
-                  final name = nameController.text.trim();
-                  if (name.isEmpty) return;
-
-                  final navigator = Navigator.of(context);
-                  final colorValue = (0xFF << 24) | (r << 16) | (g << 8) | b;
-
-                  if (categoryId != null) {
-                    await DatabaseHelper.instance
-                        .updateCategory(categoryId, name, colorValue);
-                    navigator.pop(categoryId);
-                    return;
-                  }
-
-                  final newId = await DatabaseHelper.instance.insertCategory(
-                    name,
-                    _type.name,
-                    colorValue,
-                  );
-                  navigator.pop(newId);
-                },
-                child: Text('Salvar'),
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
-    );
-  }
-
-  Widget _buildColorSlider(String label, int value, ValueChanged<int> onChanged) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 20,
-          child: Text(label),
-        ),
-        Expanded(
-          child: Slider(
-            value: value.toDouble(),
-            min: 0,
-            max: 255,
-            divisions: 255,
-            label: value.toString(),
-            onChanged: (v) => onChanged(v.toInt()),
-          ),
-        ),
-        SizedBox(
-          width: 30,
-          child: Text(value.toString()),
-        ),
-      ],
     );
   }
 
   @override
   void initState() {
     super.initState();
-    loadCategories();
+
+    final initial = widget.transaction;
+    if (initial != null) {
+      _type = initial.type;
+      _valueController.text = initial.quantity.toStringAsFixed(2);
+      _descController.text = initial.description;
+      selectedCategoryId = initial.categoryId;
+      _selectedDate = initial.date;
+      _isInstallment = initial.isInstallment;
+      _installments = initial.totalInstallments ?? 1;
+      _startDay = min(initial.date.day, 28);
+    }
+
     _installmentsController.text = _installments.toString();
+    loadCategories();
   }
 
   @override
@@ -196,59 +232,81 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
     final name = _descController.text.isEmpty ? 'Sem descrição' : _descController.text;
     final categoryId = selectedCategoryId ?? 1;
-    final now = DateTime.now();
 
-    DateTime firstDate = DateTime(now.year, now.month, _startDay);
-    if (firstDate.isBefore(now)) {
-      firstDate = _addMonths(firstDate, 1);
-    }
+    final baseDate = _selectedDate;
 
-    if (_isInstallment && _installments > 1) {
-      double? installmentValue;
-      double? lastInstallmentValue;
+    if (isEditing) {
+      final existing = widget.transaction!;
+      final updated = TransactionModel(
+        id: existing.id,
+        name: name,
+        quantity: value,
+        description: _descController.text,
+        categoryId: categoryId,
+        date: baseDate,
+        type: _type,
+        isInstallment: _isInstallment,
+        installmentNumber: existing.installmentNumber,
+        totalInstallments: existing.totalInstallments,
+        installmentGroupId: existing.installmentGroupId,
+      );
 
-      if (_type == TransactionType.expense) {
-        final baseValue = value / _installments;
-        installmentValue = double.parse(baseValue.toStringAsFixed(2));
-        lastInstallmentValue = double.parse(
-          (value - installmentValue * (_installments - 1)).toStringAsFixed(2),
-        );
+      await DatabaseHelper.instance.updateTransaction(updated);
+    } else {
+      final now = DateTime.now();
+
+      DateTime firstDate = DateTime(baseDate.year, baseDate.month, _startDay);
+      if (firstDate.isBefore(now)) {
+        firstDate = _addMonths(firstDate, 1);
       }
 
-      final groupId = '${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(9999)}';
+      if (_isInstallment && _installments > 1) {
+        double? installmentValue;
+        double? lastInstallmentValue;
 
-      for (var i = 1; i <= _installments; i++) {
-        final installmentDate = _addMonths(firstDate, i - 1);
-        final amount = _type == TransactionType.expense
-            ? (i == _installments ? lastInstallmentValue! : installmentValue!)
-            : value;
+        if (_type == TransactionType.expense) {
+          final baseValue = value / _installments;
+          installmentValue = double.parse(baseValue.toStringAsFixed(2));
+          lastInstallmentValue = double.parse(
+            (value - installmentValue * (_installments - 1)).toStringAsFixed(2),
+          );
+        }
 
+        final groupId = '${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(9999)}';
+
+        for (var i = 1; i <= _installments; i++) {
+          final installmentDate = _addMonths(firstDate, i - 1);
+          final amount = _type == TransactionType.expense
+              ? (i == _installments ? lastInstallmentValue! : installmentValue!)
+              : value;
+
+          await DatabaseHelper.instance.insertTransaction(
+            TransactionModel(
+              name: name,
+              quantity: amount,
+              description: _descController.text,
+              categoryId: categoryId,
+              date: installmentDate,
+              type: _type,
+              isInstallment: true,
+              installmentNumber: i,
+              totalInstallments: _installments,
+              installmentGroupId: groupId,
+            ),
+          );
+        }
+      } else {
         await DatabaseHelper.instance.insertTransaction(
           TransactionModel(
             name: name,
-            quantity: amount,
+            quantity: value,
             description: _descController.text,
             categoryId: categoryId,
-            date: installmentDate,
+            date: baseDate,
             type: _type,
-            isInstallment: true,
-            installmentNumber: i,
-            totalInstallments: _installments,
-            installmentGroupId: groupId,
           ),
         );
       }
-    } else {
-      await DatabaseHelper.instance.insertTransaction(
-        TransactionModel(
-          name: name,
-          quantity: value,
-          description: _descController.text,
-          categoryId: categoryId,
-          date: now,
-          type: _type,
-        ),
-      );
     }
 
     if (!mounted) return;
@@ -266,11 +324,12 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       child: Container(
         padding: EdgeInsets.all(20),
         child: SingleChildScrollView(
+          controller: widget.scrollController,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                "Nova Transação",
+                isEditing ? "Editar Transação" : "Nova Transação",
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               SizedBox(height: 20),
@@ -326,6 +385,34 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 controller: _valueController,
                 keyboardType: TextInputType.numberWithOptions(decimal: true),
                 decoration: InputDecoration(labelText: "Valor"),
+              ),
+
+              SizedBox(height: 15),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: _selectedDate,
+                          firstDate: DateTime(2000),
+                          lastDate: DateTime(2100),
+                        );
+                        if (picked != null) {
+                          setState(() {
+                            _selectedDate = picked;
+                          });
+                        }
+                      },
+                      child: Text(
+                        'Data: ${DateFormat('dd/MM/yyyy').format(_selectedDate)}',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                    ),
+                  ),
+                ],
               ),
 
               SizedBox(height: 15),
@@ -525,9 +612,11 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 ),
                 onPressed: _save,
                 child: Text(
-                  _type == TransactionType.expense
-                      ? "Adicionar Gasto"
-                      : "Adicionar Ganho",
+                  isEditing
+                      ? "Salvar alterações"
+                      : (_type == TransactionType.expense
+                          ? "Adicionar Gasto"
+                          : "Adicionar Ganho"),
                   style: TextStyle(
                     color: Colors.black,
                     fontWeight: FontWeight.bold,

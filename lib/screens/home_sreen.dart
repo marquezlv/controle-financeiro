@@ -7,6 +7,7 @@ import '../utils/formatters.dart';
 import '../widgets/amount_card.dart';
 import '../widgets/month_year_selector.dart';
 import '../widgets/section_title.dart';
+import '../screens/add_transaction_sheet.dart';
 import '../widgets/transaction_tile.dart';
 import '../widgets/year_bar_chart.dart';
 
@@ -369,6 +370,33 @@ class HomeScreenState extends State<HomeScreen> {
     await loadTransactions();
   }
 
+  Future<void> _editTransaction(TransactionModel transaction) async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.75,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (context, scrollController) {
+            return AddTransactionSheet(
+              scrollController: scrollController,
+              transaction: transaction,
+              onSaved: () async {
+                await loadTransactions();
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildTransactionSection() {
     final grouped = _groupTransactionsByDate();
 
@@ -415,6 +443,7 @@ class HomeScreenState extends State<HomeScreen> {
             ...transactions.map((item) {
               return TransactionTile(
                 transaction: item,
+                onTap: () => _editTransaction(item),
                 onDelete: () => _deleteTransaction(item),
               );
             }),

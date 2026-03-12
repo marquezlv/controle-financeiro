@@ -40,15 +40,24 @@ class _MainNavigationState extends State<MainNavigation> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
       ),
       builder: (context) {
-        return AddTransactionSheet(
-          onSaved: () {
-            if (_currentIndex == 0) {
-              homeKey.currentState?.loadTransactions();
-            } else if (_currentIndex == 1) {
-              expenseKey.currentState?.reload();
-            } else if (_currentIndex == 2) {
-              incomeKey.currentState?.reload();
-            }
+        return DraggableScrollableSheet(
+          initialChildSize: 0.75,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (context, scrollController) {
+            return AddTransactionSheet(
+              scrollController: scrollController,
+              onSaved: () {
+                if (_currentIndex == 0) {
+                  homeKey.currentState?.loadTransactions();
+                } else if (_currentIndex == 1) {
+                  expenseKey.currentState?.reload();
+                } else if (_currentIndex == 2) {
+                  incomeKey.currentState?.reload();
+                }
+              },
+            );
           },
         );
       },
