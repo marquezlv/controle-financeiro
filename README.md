@@ -1,5 +1,6 @@
 ![Flutter](https://img.shields.io/badge/Flutter-3.x-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
+![Release](https://img.shields.io/github/v/release/marquezlv/controle-financeiro)
 
 # 💰 Controle de Gastos
 
@@ -23,20 +24,24 @@ O objetivo do aplicativo é permitir que o usuário registre, visualize e organi
 
 ## 📸 Screenshots
 
-| Tela inicial | Adicionar gasto |
-|--------------|----------------|
-|  |  |
+<table>
+<tr>
+<td><img src="screenshots/Home.jpeg" width="100" height="100"/></td>
+<td><img src="screenshots/addExpense.jpeg" width="100" height="100"/></td>
+</tr>
+</table>
 
 ---
 
 ## 📦 Download
 
-Você pode baixar a versão mais recente na página de **Releases**:
+Baixe a versão mais recente do aplicativo:
 
-👉 [https://github.com/SEU_USUARIO/controle_gastos/releases](https://github.com/marquezlv/controle-financeiro/releases/tag/v1.0.0)
+👉 https://github.com/marquezlv/controle-financeiro/releases
 
-Baixe o arquivo: app-release.apk
-e instale no seu dispositivo Android.
+Instale o arquivo:
+
+app-release.apk
 
 ---
 
