@@ -25,7 +25,7 @@ O objetivo do aplicativo é permitir que o usuário registre, visualize e organi
 
 | Tela inicial | Adicionar gasto |
 |--------------|----------------|
-|  |  |
+| ![Home](screenshots/home.png) | ![AddExpense](screenshots/addExpense.png) |
 
 ---
 
