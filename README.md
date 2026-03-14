@@ -28,6 +28,12 @@ O objetivo do aplicativo é permitir que o usuário registre, visualize e organi
 <tr>
 <td><img src="screenshots/Home.jpeg" width="100" height="100"/></td>
 <td><img src="screenshots/addExpense.jpeg" width="100" height="100"/></td>
+  <td><img src="screenshots/graphExpense.jpeg" width="100" height="100"/></td>
+</tr>
+<tr>
+  <td><img src="screenshots/graphIncome.jpeg" width="100" height="100"/></td>
+  <td><img src="screenshots/addProjection.jpeg" width="100" height="100"/></td>
+  <td><img src="screenshots/projection.jpeg" width="100" height="100"/></td>
 </tr>
 </table>
 
