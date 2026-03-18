@@ -2,23 +2,23 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Release](https://img.shields.io/github/v/release/marquezlv/controle-financeiro)
 
-# 💰 Controle de Gastos
+# 💰 Expense Tracker
 
-Aplicativo mobile desenvolvido em Flutter para gerenciamento simples de despesas pessoais.
+A mobile application built with Flutter for simple personal expense management.
 
-O objetivo do aplicativo é permitir que o usuário registre, visualize e organize seus gastos de forma rápida e intuitiva.
+The goal of this application is to allow users to register, visualize, and organize their expenses in a quick and intuitive way.
 
 ---
 
-## 📱 Funcionalidades
+## 📱 Features
 
-- Adicionar gastos
-- Categorizar despesas
-- Adicionar e controlar projeções
-- Gráficos organizados
-- Selecionar cores personalizadas
-- Armazenamento local de dados
-- Interface simples e rápida
+- Add expenses
+- Categorize expenses
+- Add and manage projections
+- Organized charts and graphs
+- Custom color selection
+- Local data storage
+- Simple and intuitive interface
 
 ---
 
@@ -26,8 +26,14 @@ O objetivo do aplicativo é permitir que o usuário registre, visualize e organi
 
 <table>
 <tr>
-<td><img src="screenshots/Home.jpeg" width="100" height="100"/></td>
-<td><img src="screenshots/addExpense.jpeg" width="100" height="100"/></td>
+<td><img src="screenshots/home.jpeg" width="300"></td>
+<td><img src="screenshots/addExpense.jpeg" width="300"></td>
+<td><img src="screenshots/graphExpense.jpeg" width="300"></td>
+</tr>
+<tr>
+<td><img src="screenshots/graphIncome.jpeg" width="300"></td>
+<td><img src="screenshots/addProjection.jpeg" width="300"></td>
+<td><img src="screenshots/projection.jpeg" width="300"></td>
 </tr>
 </table>
 
@@ -35,33 +41,33 @@ O objetivo do aplicativo é permitir que o usuário registre, visualize e organi
 
 ## 📦 Download
 
-Baixe a versão mais recente do aplicativo:
+Download the latest version of the application:
 
 👉 https://github.com/marquezlv/controle-financeiro/releases
 
-Instale o arquivo:
+Install the file:
 
 app-release.apk
 
 ---
 
-## ⚙️ Tecnologias utilizadas
+## ⚙️ Technologies Used
 
 - Flutter
 - Dart
-- SQLite / armazenamento local
+- SQLite / local storage
 - Material Design
 
 ---
 
-## 🚀 Como executar o projeto
+## 🚀 How to Run the Project
 
-1. Clone o repositório https://github.com/marquezlv/controle-financeiro
-2. Entre na pasta cd controle_gastos
-3. Instale as dependências flutter pub get
-4. Execute o projeto flutter run
+1. Clone the repository https://github.com/marquezlv/controle-financeiro
+2. Enter the project folder cd controle_gastos
+3. Install dependencies flutter pub get
+4. Run the project flutter run
 
-## 📂 Estrutura do projeto
+## 📂 Project Structure
 
 lib/
 ├── core/database
@@ -72,15 +78,14 @@ lib/
 ├── widgets
 └── main.dart
 
+---
+
+## 🧠 Project Purpose
+
+This project was developed as a practice project for mobile development using Flutter.
 
 ---
 
-## 🧠 Objetivo do projeto
+## 📄 License
 
-Este projeto foi desenvolvido como prática de desenvolvimento mobile utilizando Flutter.
-
----
-
-## 📄 Licença
-
-Este projeto está sob licença MIT.
+This project is licensed under the MIT License.
