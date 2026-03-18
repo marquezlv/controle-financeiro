@@ -1,25 +1,24 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import '../core/database/database_helper.dart';
 import '../models/organization_model.dart';
 import '../models/transaction_model.dart';
+import '../services/category_service.dart';
+import '../services/organization_service.dart';
+import '../services/transaction_service.dart';
 import '../utils/formatters.dart';
-import '../widgets/color_picker.dart';
+import '../utils/installment_utils.dart';
+import '../widgets/organization/create_organization_modal.dart';
+import '../widgets/organization/organization_card.dart';
 
 class OrganizationScreen extends StatefulWidget {
   const OrganizationScreen({super.key});
 
   @override
-  _OrganizationScreenState createState() => _OrganizationScreenState();
+  State<OrganizationScreen> createState() => _OrganizationScreenState();
 }
 
 class _OrganizationScreenState extends State<OrganizationScreen> {
-  final _nameController = TextEditingController();
-  final _valueController = TextEditingController();
-  final TextEditingController _installmentsController = TextEditingController(text: '2');
-
-
   List<TransactionModel> _transactions = [];
   List<OrganizationModel> _organizations = [];
   double _currentBalance = 0;
@@ -32,21 +31,13 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
     _loadData();
   }
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _valueController.dispose();
-    _installmentsController.dispose();
-    super.dispose();
-  }
-
   Future<void> _loadData() async {
     await _loadTransactions();
     await _loadOrganizations();
   }
 
   Future<void> _loadTransactions() async {
-    final data = await DatabaseHelper.instance.getAllTransactions();
+    final data = await TransactionService.getAll();
     setState(() {
       _transactions = data;
     });
@@ -54,7 +45,7 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
   }
 
   Future<void> _loadOrganizations() async {
-    final data = await DatabaseHelper.instance.getAllOrganizations();
+    final data = await OrganizationService.getAll();
     setState(() {
       _organizations = data;
     });
@@ -95,137 +86,11 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
     });
   }
 
-  void _openNewProjectionModal() {
-    _nameController.clear();
-    _valueController.clear();
-
-    Color selectedColor = const Color(0xFF3B82F6);
-    final hexController = TextEditingController(
-      text: '#${selectedColor.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
-    );
-
-    bool isInstallment = false;
-    int installments = 2;
-    _installmentsController.text = installments.toString();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-      ),
-      builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.75,
-          minChildSize: 0.5,
-          maxChildSize: 0.95,
-          expand: false,
-          builder: (context, scrollController) {
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: StatefulBuilder(
-                builder: (context, setModalState) {
-                  return _buildCreateModal(
-                    scrollController: scrollController,
-                    selectedColor: selectedColor,
-                      hexController: hexController,
-                      isInstallment: isInstallment,
-                      installments: installments,
-                      onColorChanged: (color) => setModalState(() {
-                        selectedColor = color;
-                        final hex = color.toARGB32()
-                            .toRadixString(16)
-                            .padLeft(8, '0')
-                            .substring(2)
-                            .toUpperCase();
-                        hexController.text = '#$hex';
-                      }),
-                      onHexChanged: (hex) {
-                        final cleaned = hex.replaceAll('#', '').trim();
-                        if (cleaned.length == 6) {
-                          final parsed = int.tryParse(cleaned, radix: 16);
-                          if (parsed != null) {
-                            setModalState(() {
-                              selectedColor = Color(0xFF000000 | parsed);
-                            });
-                          }
-                        }
-                      },
-                    onInstallmentToggle: (value) => setModalState(() {
-                      isInstallment = value;
-                    }),
-                    onInstallmentsChanged: (value) => setModalState(() {
-                      installments = value;
-                      _installmentsController.text = value.toString();
-                    }),
-                    onCreate: () => _createProjection(selectedColor, installments),
-                  );
-                },
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _createProjection(Color selectedColor, int installments) async {
-    final name = _nameController.text.trim();
-    final value =
-        double.tryParse(_valueController.text.replaceAll(',', '.')) ?? 0;
-
-    if (name.isEmpty || value <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Informe nome e valor válidos.')),
-      );
-      return;
-    }
-
-    final org = OrganizationModel(
-      name: name,
-      quantity: value,
-      description: '',
-      createdAt: DateTime.now(),
-      completed: false,
-      color: selectedColor.toARGB32(),
-      installments: installments,
-    );
-
-    await DatabaseHelper.instance.insertOrganization(org);
-
-    final categoryId = await DatabaseHelper.instance
-        .getOrCreateCategory(name, TransactionType.expense.name);
-    await DatabaseHelper.instance
-        .updateCategory(categoryId, name, selectedColor.toARGB32());
-
-    if (!mounted) return;
-    await _loadOrganizations();
-    if (!mounted) return;
-    Navigator.of(context).pop();
-  }
-
-  DateTime _addMonths(DateTime date, int months) {
-    final year = date.year + ((date.month - 1 + months) ~/ 12);
-    final month = ((date.month - 1 + months) % 12) + 1;
-    final lastDayOfMonth = DateTime(year, month + 1, 0).day;
-    final day = min(date.day, lastDayOfMonth);
-    return DateTime(
-      year,
-      month,
-      day,
-      date.hour,
-      date.minute,
-      date.second,
-      date.millisecond,
-      date.microsecond,
-    );
-  }
-
   Future<void> _completeAndRegisterExpense(OrganizationModel org) async {
-    final categoryId = await DatabaseHelper.instance
-        .getOrCreateCategory(org.name, TransactionType.expense.name);
+    final categoryId = await CategoryService.getOrCreate(
+      org.name,
+      TransactionType.expense.name,
+    );
 
     final now = DateTime.now();
     final totalInstallments = org.installments > 1 ? org.installments : 1;
@@ -240,11 +105,11 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
       final groupId = '${now.millisecondsSinceEpoch}-${Random().nextInt(9999)}';
 
       for (var i = 1; i <= totalInstallments; i++) {
-        final installmentDate = _addMonths(now, i - 1);
+        final installmentDate = addMonths(now, i - 1);
         final amount =
             i == totalInstallments ? lastInstallmentValue : installmentValue;
 
-        await DatabaseHelper.instance.insertTransaction(
+        await TransactionService.insert(
           TransactionModel(
             name: org.name,
             quantity: amount,
@@ -260,7 +125,7 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
         );
       }
     } else {
-      await DatabaseHelper.instance.insertTransaction(
+      await TransactionService.insert(
         TransactionModel(
           name: org.name,
           quantity: org.quantity,
@@ -273,14 +138,14 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
     }
 
     if (org.id != null) {
-      await DatabaseHelper.instance.deleteOrganization(org.id!);
+      await OrganizationService.delete(org.id!);
     }
 
     await _loadData();
   }
 
-  void _deleteOrganization(int id) async {
-    await DatabaseHelper.instance.deleteOrganization(id);
+  Future<void> _deleteOrganization(int id) async {
+    await OrganizationService.delete(id);
     await _loadOrganizations();
   }
 
@@ -312,7 +177,15 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
                     const SizedBox(height: 12),
                     if (_organizations.isEmpty) _buildEmptyState(),
                     ..._organizations.map(
-                      (org) => _buildOrganizationCard(org, afterBalance),
+                      (org) => OrganizationCard(
+                        org: org,
+                        onDelete: () {
+                          if (org.id != null) {
+                            _deleteOrganization(org.id!);
+                          }
+                        },
+                        onComplete: () => _completeAndRegisterExpense(org),
+                      ),
                     ),
                   ],
                 ),
@@ -437,7 +310,14 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
 
   Widget _buildNewProjectionButton() {
     return GestureDetector(
-      onTap: _openNewProjectionModal,
+      onTap: () {
+        CreateOrganizationModal.show(
+          context,
+          onCreated: () {
+            _loadOrganizations();
+          },
+        );
+      },
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 14),
@@ -492,348 +372,4 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
       ),
     );
   }
-
-  Widget _buildOrganizationCard(OrganizationModel org, double afterBalance) {
-    final color = org.color != null ? Color(org.color!) : const Color(0xFF3B82F6);
-    final reserveValue = org.quantity;
-    final months = org.installments > 1 ? org.installments : 1;
-    final monthlyValue = reserveValue / months;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 18),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha((0.05 * 255).round()),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: color.withAlpha((0.15 * 255).round()),
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Container(
-                    width: 14,
-                    height: 14,
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      org.name,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Criado em ${org.createdAt.day.toString().padLeft(2, '0')}/${org.createdAt.month.toString().padLeft(2, '0')}/${org.createdAt.year}',
-                      style: const TextStyle(color: Colors.grey),
-                    ),
-                  ],
-                ),
-              ),
-              GestureDetector(
-                onTap: () {
-                  if (org.id != null) {
-                    _deleteOrganization(org.id!);
-                  }
-                },
-                child: const Icon(Icons.close, color: Colors.redAccent),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Valor Reservado',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _formatCurrency(reserveValue),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.red,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Por mês',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _formatCurrency(monthlyValue),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: () => _completeAndRegisterExpense(org),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: color,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-              minimumSize: const Size.fromHeight(46),
-            ),
-            child: const Text(
-              'Concluir e Registrar Gasto',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCreateModal({
-    required ScrollController scrollController,
-    required Color selectedColor,
-    required TextEditingController hexController,
-    required bool isInstallment,
-    required int installments,
-    required ValueChanged<Color> onColorChanged,
-    required ValueChanged<String> onHexChanged,
-    required ValueChanged<bool> onInstallmentToggle,
-    required ValueChanged<int> onInstallmentsChanged,
-    required VoidCallback onCreate,
-  }) {
-    final previewColor = selectedColor;
-    final previewName = _nameController.text.trim().isEmpty
-        ? 'Nome da Projeção'
-        : _nameController.text.trim();
-    final previewValue =
-        double.tryParse(_valueController.text.replaceAll(',', '.')) ?? 0;
-    final perMonthValue =
-        previewValue / (isInstallment && installments > 0 ? installments : 1);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        child: SingleChildScrollView(
-          controller: scrollController,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Nova Projeção',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const Text('Nome da Projeção'),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  hintText: 'Ex: Viagem, Comprar casa, Carro, etc.',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text('Valor a Reservar'),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _valueController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                  prefixText: 'R\$ ',
-                  hintText: '0,00',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: 16),
-              ColorPicker(
-                color: selectedColor,
-                onColorChanged: onColorChanged,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: hexController,
-                decoration: InputDecoration(
-                  labelText: 'Hex',
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: onHexChanged,
-              ),
-              const SizedBox(height: 12),
-              CheckboxListTile(
-                value: isInstallment,
-                onChanged: (value) => onInstallmentToggle(value ?? false),
-                title: const Text('Parcelado'),
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-              ),
-              if (isInstallment) ...[
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _installmentsController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Meses',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  onChanged: (value) {
-                    final parsed = int.tryParse(value);
-                    if (parsed != null && parsed > 0) {
-                      onInstallmentsChanged(parsed);
-                    }
-                  },
-                ),
-              ],
-              const SizedBox(height: 20),
-              const Text('Preview'),
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha((0.05 * 255).round()),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: previewColor.withAlpha((0.2 * 255).round()),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Center(
-                            child: Container(
-                              width: 16,
-                              height: 16,
-                              decoration: BoxDecoration(
-                                color: previewColor,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                previewName,
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _formatCurrency(previewValue),
-                                style: TextStyle(color: previewColor),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (isInstallment) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        'Por mês: ${_formatCurrency(perMonthValue)}',
-                        style: TextStyle(color: previewColor),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: onCreate,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.redAccent,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  child: const Text(
-                    'Criar Projeção',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
-

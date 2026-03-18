@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../screens/home_sreen.dart';
 import '../screens/expense_screen.dart';
-import '../screens/add_transaction_sheet.dart';
+import '../widgets/dialogs/add_transaction_sheet.dart';
 import '../screens/income_screen.dart';
 import '../screens/organization_screen.dart';
 
@@ -9,7 +9,7 @@ class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
 
   @override
-  _MainNavigationState createState() => _MainNavigationState();
+  State<MainNavigation> createState() => _MainNavigationState();
 }
 
 class _MainNavigationState extends State<MainNavigation> {

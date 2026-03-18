@@ -11,7 +11,7 @@ class ColorPicker extends StatefulWidget {
   });
 
   @override
-  _ColorPickerState createState() => _ColorPickerState();
+  State<ColorPicker> createState() => _ColorPickerState();
 }
 
 class _ColorPickerState extends State<ColorPicker> {
@@ -148,7 +148,7 @@ class _ColorPickerState extends State<ColorPicker> {
                     1,
                     1,
                   ).toColor(),
-                  overlayColor: Colors.white.withOpacity(0.2),
+                  overlayColor: Colors.white.withValues(alpha: 0.2),
                 ),
                 child: Slider(
                   value: _hsvColor.hue,

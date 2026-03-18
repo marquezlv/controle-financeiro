@@ -1,0 +1,481 @@
+import 'dart:math';
+
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../../models/transaction_model.dart';
+import '../../services/category_service.dart';
+import '../../services/transaction_service.dart';
+import '../../utils/installment_utils.dart';
+import 'add_category_sheet.dart';
+
+class AddTransactionSheet extends StatefulWidget {
+  final VoidCallback? onSaved;
+  final ScrollController? scrollController;
+  final TransactionModel? transaction;
+
+  const AddTransactionSheet({
+    super.key,
+    this.onSaved,
+    this.scrollController,
+    this.transaction,
+  });
+
+  @override
+  // ignore: library_private_types_in_public_api
+  _AddTransactionSheetState createState() => _AddTransactionSheetState();
+}
+
+class _AddTransactionSheetState extends State<AddTransactionSheet> {
+  List<Map<String, dynamic>> categories = [];
+  TransactionType _type = TransactionType.expense;
+  final TextEditingController _valueController = TextEditingController();
+  final TextEditingController _descController = TextEditingController();
+  final TextEditingController _installmentsController =
+      TextEditingController();
+  int? selectedCategoryId;
+  DateTime _selectedDate = DateTime.now();
+
+  bool get isEditing => widget.transaction != null;
+
+  bool _isInstallment = false;
+  int _installments = 2;
+  int _startDay = min(DateTime.now().day, 28);
+
+  Future<void> loadCategories() async {
+    final data = await CategoryService.getByType(_type.name);
+    setState(() {
+      categories = data;
+      if (categories.isNotEmpty && selectedCategoryId == null) {
+        selectedCategoryId = categories.first['id'] as int?;
+      }
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.transaction;
+    if (initial != null) {
+      _type = initial.type;
+      _valueController.text = initial.quantity.toStringAsFixed(2);
+      _descController.text = initial.description;
+      selectedCategoryId = initial.categoryId;
+      _selectedDate = initial.date;
+      _isInstallment = initial.isInstallment;
+      _installments = initial.totalInstallments ?? 1;
+      _startDay = min(initial.date.day, 28);
+    }
+    _installmentsController.text = _installments.toString();
+    loadCategories();
+  }
+
+  @override
+  void dispose() {
+    _valueController.dispose();
+    _descController.dispose();
+    _installmentsController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_valueController.text.isEmpty) return;
+    final value =
+        double.tryParse(_valueController.text.replaceAll(',', '.'));
+    if (value == null) return;
+
+    final name = _descController.text.isEmpty
+        ? 'Sem descrição'
+        : _descController.text;
+    final categoryId = selectedCategoryId ?? 1;
+    final baseDate = _selectedDate;
+
+    if (isEditing) {
+      final existing = widget.transaction!;
+      await TransactionService.update(TransactionModel(
+        id: existing.id,
+        name: name,
+        quantity: value,
+        description: _descController.text,
+        categoryId: categoryId,
+        date: baseDate,
+        type: _type,
+        isInstallment: _isInstallment,
+        installmentNumber: existing.installmentNumber,
+        totalInstallments: existing.totalInstallments,
+        installmentGroupId: existing.installmentGroupId,
+      ));
+    } else {
+      final now = DateTime.now();
+      DateTime firstDate =
+          DateTime(baseDate.year, baseDate.month, _startDay);
+      if (firstDate.isBefore(now)) {
+        firstDate = addMonths(firstDate, 1);
+      }
+
+      if (_isInstallment && _installments > 1) {
+        double? installmentValue;
+        double? lastInstallmentValue;
+
+        if (_type == TransactionType.expense) {
+          final baseValue = value / _installments;
+          installmentValue =
+              double.parse(baseValue.toStringAsFixed(2));
+          lastInstallmentValue = double.parse(
+            (value - installmentValue * (_installments - 1))
+                .toStringAsFixed(2),
+          );
+        }
+
+        final groupId =
+            '${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(9999)}';
+
+        for (var i = 1; i <= _installments; i++) {
+          final installmentDate = addMonths(firstDate, i - 1);
+          final amount = _type == TransactionType.expense
+              ? (i == _installments
+                  ? lastInstallmentValue!
+                  : installmentValue!)
+              : value;
+
+          await TransactionService.insert(TransactionModel(
+            name: name,
+            quantity: amount,
+            description: _descController.text,
+            categoryId: categoryId,
+            date: installmentDate,
+            type: _type,
+            isInstallment: true,
+            installmentNumber: i,
+            totalInstallments: _installments,
+            installmentGroupId: groupId,
+          ));
+        }
+      } else {
+        await TransactionService.insert(TransactionModel(
+          name: name,
+          quantity: value,
+          description: _descController.text,
+          categoryId: categoryId,
+          date: baseDate,
+          type: _type,
+        ));
+      }
+    }
+
+    if (!mounted) return;
+    widget.onSaved?.call();
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        child: SingleChildScrollView(
+          controller: widget.scrollController,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                isEditing ? 'Editar Transação' : 'Nova Transação',
+                style: const TextStyle(
+                    fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+
+              // Type toggle
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                            _type == TransactionType.expense
+                                ? Colors.red
+                                : Colors.grey.shade300,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _type = TransactionType.expense;
+                          selectedCategoryId = null;
+                        });
+                        loadCategories();
+                      },
+                      child: const Text('Gasto',
+                          style: TextStyle(color: Colors.black)),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                            _type == TransactionType.income
+                                ? Colors.green
+                                : Colors.grey.shade300,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _type = TransactionType.income;
+                          selectedCategoryId = null;
+                        });
+                        loadCategories();
+                      },
+                      child: const Text('Ganho',
+                          style: TextStyle(color: Colors.black)),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 20),
+
+              TextField(
+                controller: _valueController,
+                keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true),
+                decoration:
+                    const InputDecoration(labelText: 'Valor'),
+              ),
+
+              const SizedBox(height: 15),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: _selectedDate,
+                          firstDate: DateTime(2000),
+                          lastDate: DateTime(2100),
+                        );
+                        if (picked != null) {
+                          setState(() => _selectedDate = picked);
+                        }
+                      },
+                      child: Text(
+                        'Data: ${DateFormat('dd/MM/yyyy').format(_selectedDate)}',
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 15),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<int>(
+                      initialValue: selectedCategoryId,
+                      decoration: InputDecoration(
+                        labelText: 'Categoria',
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                      items: [
+                        ...categories.map((category) {
+                          final rawColor = category['color'];
+                          final colorValue = rawColor is int
+                              ? rawColor
+                              : int.tryParse(
+                                      rawColor?.toString() ?? '') ??
+                                  0xFF2196F3;
+                          final rawId = category['id'];
+                          final catId = rawId is int
+                              ? rawId
+                              : int.tryParse(
+                                      rawId?.toString() ?? '') ??
+                                  0;
+                          return DropdownMenuItem<int>(
+                            value: catId,
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Color(colorValue),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Text(category['name'] as String),
+                              ],
+                            ),
+                          );
+                        }),
+                        DropdownMenuItem<int>(
+                          value: -1,
+                          child: Row(
+                            children: const [
+                              Icon(Icons.add, size: 18),
+                              SizedBox(width: 10),
+                              Text('Adicionar categoria'),
+                            ],
+                          ),
+                        ),
+                      ],
+                      onChanged: (value) async {
+                        if (value == null) return;
+                        if (value == -1) {
+                          final newId =
+                              await AddCategorySheet.show(context,
+                                  type: _type.name);
+                          if (newId != null) {
+                            await loadCategories();
+                            setState(
+                                () => selectedCategoryId = newId);
+                          }
+                          return;
+                        }
+                        setState(() => selectedCategoryId = value);
+                      },
+                    ),
+                  ),
+                  if (selectedCategoryId != null)
+                    IconButton(
+                      icon: const Icon(Icons.edit),
+                      tooltip: 'Editar categoria',
+                      onPressed: () async {
+                        final selected = categories.firstWhere(
+                          (c) {
+                            final id = c['id'] is int
+                                ? c['id']
+                                : int.tryParse(
+                                    c['id']?.toString() ?? '');
+                            return id == selectedCategoryId;
+                          },
+                          orElse: () => {},
+                        );
+                        if (selected.isEmpty) return;
+
+                        final rawColor = selected['color'];
+                        final colorValue = rawColor is int
+                            ? rawColor
+                            : int.tryParse(
+                                    rawColor?.toString() ?? '') ??
+                                0xFF2196F3;
+                        final name =
+                            selected['name']?.toString() ?? '';
+
+                        final updatedId =
+                            await AddCategorySheet.show(context,
+                                initialName: name,
+                                initialColor: colorValue,
+                                categoryId: selectedCategoryId,
+                                type: _type.name);
+
+                        if (updatedId != null) {
+                          await loadCategories();
+                          setState(
+                              () => selectedCategoryId = updatedId);
+                        }
+                      },
+                    ),
+                ],
+              ),
+
+              const SizedBox(height: 15),
+
+              TextField(
+                controller: _descController,
+                decoration:
+                    const InputDecoration(labelText: 'Descrição'),
+              ),
+
+              const SizedBox(height: 15),
+
+              CheckboxListTile(
+                value: _isInstallment,
+                onChanged: (value) =>
+                    setState(() => _isInstallment = value ?? false),
+                title: Text(_type == TransactionType.income
+                    ? 'Recorrente'
+                    : 'Parcelado'),
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+              ),
+
+              if (_isInstallment) ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _installmentsController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: 'Meses',
+                          border: OutlineInputBorder(
+                              borderRadius:
+                                  BorderRadius.circular(12)),
+                        ),
+                        onChanged: (value) {
+                          final parsed = int.tryParse(value);
+                          if (parsed != null && parsed > 0) {
+                            setState(() => _installments = parsed);
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        initialValue: _startDay,
+                        decoration: InputDecoration(
+                          labelText: 'Dia de início',
+                          border: OutlineInputBorder(
+                              borderRadius:
+                                  BorderRadius.circular(12)),
+                        ),
+                        items: List.generate(28, (i) => i + 1)
+                            .map((day) => DropdownMenuItem<int>(
+                                  value: day,
+                                  child: Text(day.toString()),
+                                ))
+                            .toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() => _startDay = value);
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 25),
+              ],
+
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                      _type == TransactionType.expense
+                          ? Colors.red
+                          : Colors.green,
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+                onPressed: _save,
+                child: Text(
+                  isEditing
+                      ? 'Salvar alterações'
+                      : (_type == TransactionType.expense
+                          ? 'Adicionar Gasto'
+                          : 'Adicionar Ganho'),
+                  style: const TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

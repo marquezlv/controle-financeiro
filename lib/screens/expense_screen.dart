@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import '../models/transaction_model.dart';
-import '../core/database/database_helper.dart';
+import '../services/transaction_service.dart';
 import '../utils/formatters.dart';
-import '../widgets/amount_card.dart';
-import '../widgets/category_pie_chart.dart';
+import '../widgets/expense/expense_category_section.dart';
 import '../widgets/month_year_selector.dart';
-import '../widgets/section_title.dart';
-import '../widgets/transaction_tile.dart';
+import '../widgets/shared/amount_card.dart';
+import '../widgets/transaction/transaction_tile.dart';
 
 class ExpenseScreen extends StatefulWidget {
   const ExpenseScreen({super.key});
@@ -20,13 +19,34 @@ class ExpenseScreenState extends State<ExpenseScreen> {
   double _totalExpense = 0;
 
   Map<String, double> _categoryTotals = {};
-  final Map<String, int> _categoryColors = {}; // store the color for each category name
+  final Map<String, int> _categoryColors = {};
 
   int _selectedMonth = DateTime.now().month;
   int _selectedYear = DateTime.now().year;
 
+  final List<String> _months = [
+    'Janeiro',
+    'Fevereiro',
+    'Março',
+    'Abril',
+    'Maio',
+    'Junho',
+    'Julho',
+    'Agosto',
+    'Setembro',
+    'Outubro',
+    'Novembro',
+    'Dezembro',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTransactions();
+  }
+
   Future<void> _loadTransactions() async {
-    final data = await DatabaseHelper.instance.getAllTransactions();
+    final data = await TransactionService.getAll();
 
     setState(() {
       _transactions = data;
@@ -41,10 +61,9 @@ class ExpenseScreenState extends State<ExpenseScreen> {
 
   Future<void> _deleteTransaction(TransactionModel transaction) async {
     if (transaction.installmentGroupId != null) {
-      await DatabaseHelper.instance
-          .deleteTransactionGroup(transaction.installmentGroupId!);
+      await TransactionService.deleteGroup(transaction.installmentGroupId!);
     } else if (transaction.id != null) {
-      await DatabaseHelper.instance.deleteTransaction(transaction.id!);
+      await TransactionService.delete(transaction.id!);
     }
 
     await _loadTransactions();
@@ -52,27 +71,23 @@ class ExpenseScreenState extends State<ExpenseScreen> {
 
   void _calculateExpenses() {
     double total = 0;
-
-    Map<String, double> categoryMap = {};
+    final categoryMap = <String, double>{};
     _categoryColors.clear();
 
     for (var transaction in _transactions) {
       if (transaction.type != TransactionType.expense) continue;
-
-      if (transaction.date.month == _selectedMonth &&
-          transaction.date.year == _selectedYear) {
-        total += transaction.quantity;
-
-        String category = transaction.categoryName ?? "Outros";
-        final colorValue = transaction.categoryColor ?? 0xFF2196F3;
-
-        if (!categoryMap.containsKey(category)) {
-          categoryMap[category] = 0;
-          _categoryColors[category] = colorValue;
-        }
-
-        categoryMap[category] = categoryMap[category]! + transaction.quantity;
+      if (transaction.date.month != _selectedMonth ||
+          transaction.date.year != _selectedYear) {
+        continue;
       }
+
+      total += transaction.quantity;
+
+      final category = transaction.categoryName ?? 'Outros';
+      final colorValue = transaction.categoryColor ?? 0xFF2196F3;
+
+      categoryMap[category] = (categoryMap[category] ?? 0) + transaction.quantity;
+      _categoryColors.putIfAbsent(category, () => colorValue);
     }
 
     setState(() {
@@ -90,73 +105,42 @@ class ExpenseScreenState extends State<ExpenseScreen> {
   }
 
   Map<String, List<TransactionModel>> _groupTransactionsByDate() {
-    Map<String, List<TransactionModel>> grouped = {};
+    final grouped = <String, List<TransactionModel>>{};
 
     for (var transaction in _getFilteredExpenses()) {
       final dateKey =
-          "${transaction.date.day.toString().padLeft(2, '0')}/"
-          "${transaction.date.month.toString().padLeft(2, '0')}/"
-          "${transaction.date.year}";
+          '${transaction.date.day.toString().padLeft(2, '0')}/${transaction.date.month.toString().padLeft(2, '0')}/${transaction.date.year}';
 
-      if (!grouped.containsKey(dateKey)) {
-        grouped[dateKey] = [];
-      }
-
-      grouped[dateKey]!.add(transaction);
+      grouped.putIfAbsent(dateKey, () => []).add(transaction);
     }
 
     return grouped;
   }
 
   @override
-  void initState() {
-    super.initState();
-    _loadTransactions();
-  }
-
-  final List<String> _months = [
-    "Janeiro",
-    "Fevereiro",
-    "Março",
-    "Abril",
-    "Maio",
-    "Junho",
-    "Julho",
-    "Agosto",
-    "Setembro",
-    "Outubro",
-    "Novembro",
-    "Dezembro",
-  ];
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFFF3F4F6),
-
+      backgroundColor: const Color(0xFFF3F4F6),
       body: SafeArea(
         child: Column(
           children: [
             _buildHeader(),
-
             Expanded(
               child: SingleChildScrollView(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildMonthSelector(),
-
-                    SizedBox(height: 20),
-
+                    const SizedBox(height: 20),
                     _buildTotalExpenseCard(),
-
-                    SizedBox(height: 25),
-
-                    _buildCategorySection(),
-
-                    SizedBox(height: 30),
-
+                    const SizedBox(height: 25),
+                    ExpenseCategorySection(
+                      categoryTotals: _categoryTotals,
+                      categoryColors: _categoryColors,
+                      total: _totalExpense,
+                    ),
+                    const SizedBox(height: 30),
                     _buildTransactionSection(),
                   ],
                 ),
@@ -171,29 +155,27 @@ class ExpenseScreenState extends State<ExpenseScreen> {
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(24),
-      decoration: BoxDecoration(
+      padding: const EdgeInsets.all(24),
+      decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [Color(0xFF2F6BFF), Color(0xFF1E4ED8)],
         ),
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
       ),
-      child: Column(
+      child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            "Gastos",
+            'Gastos',
             style: TextStyle(
               fontSize: 26,
               fontWeight: FontWeight.bold,
               color: Colors.white,
             ),
           ),
-
           SizedBox(height: 5),
-
           Text(
-            "Veja para onde seu dinheiro está indo",
+            'Veja para onde seu dinheiro está indo',
             style: TextStyle(color: Colors.white70),
           ),
         ],
@@ -230,100 +212,8 @@ class ExpenseScreenState extends State<ExpenseScreen> {
     return AmountCard(
       title: 'Gasto Total',
       amount: formatCurrency(_totalExpense),
-      gradient: LinearGradient(
+      gradient: const LinearGradient(
         colors: [Color(0xFFFF6B6B), Color(0xFFE53935)],
-      ),
-    );
-  }
-
-  Widget _buildCategorySection() {
-    if (_categoryTotals.isEmpty) {
-      return Text("Nenhum gasto no período");
-    }
-
-    final entries = _categoryTotals.entries.toList();
-    final palette = [
-      Colors.red,
-      Colors.orange,
-      Colors.purple,
-      Colors.teal,
-      Colors.blue,
-      Colors.green,
-      Colors.indigo,
-      Colors.yellow.shade700,
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Center(child: SectionTitle(title: "Gastos por Categoria")),
-
-        SizedBox(height: 20),
-
-        Center(
-          child: CategoryPieChart(
-            size: 220,
-            values: entries.map((e) => e.value).toList(),
-            colors: List.generate(entries.length, (index) {
-              final cat = entries[index].key;
-              final colorValue = _categoryColors[cat];
-              return colorValue != null
-                  ? Color(colorValue)
-                  : palette[index % palette.length];
-            }),
-            labels: entries.map((e) => e.key).toList(),
-            centerText: formatCurrency(_totalExpense),
-          ),
-        ),
-
-        SizedBox(height: 20),
-
-        ...entries.asMap().entries.map((mapEntry) {
-          final index = mapEntry.key;
-          final entry = mapEntry.value;
-          final cat = entry.key;
-          final colorValue = _categoryColors[cat];
-          final color = colorValue != null
-              ? Color(colorValue)
-              : palette[index % palette.length];
-
-          return _categoryItem(entry.key, entry.value, color);
-        }),
-      ],
-    );
-  }
-
-  Widget _categoryItem(String category, double amount, Color color) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 10),
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              SizedBox(width: 10),
-              Text(category, style: TextStyle(fontWeight: FontWeight.w500)),
-            ],
-          ),
-
-          Text(
-            formatCurrency(amount),
-            style: TextStyle(fontWeight: FontWeight.bold, color: color),
-          ),
-        ],
       ),
     );
   }
@@ -332,7 +222,7 @@ class ExpenseScreenState extends State<ExpenseScreen> {
     final grouped = _groupTransactionsByDate();
 
     if (_getFilteredExpenses().isEmpty) {
-      return Text("Nenhum gasto no período");
+      return const Text('Nenhum gasto no período');
     }
 
     return Column(
@@ -344,8 +234,7 @@ class ExpenseScreenState extends State<ExpenseScreen> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(height: 20),
-
+            const SizedBox(height: 20),
             Text(
               date,
               style: TextStyle(
@@ -354,9 +243,7 @@ class ExpenseScreenState extends State<ExpenseScreen> {
                 color: Colors.grey[700],
               ),
             ),
-
-            SizedBox(height: 10),
-
+            const SizedBox(height: 10),
             ...transactions.map((item) {
               return TransactionTile(
                 transaction: item,
@@ -369,4 +256,3 @@ class ExpenseScreenState extends State<ExpenseScreen> {
     );
   }
 }
-
