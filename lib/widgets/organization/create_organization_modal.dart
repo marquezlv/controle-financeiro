@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../models/organization_model.dart';
 import '../../services/category_service.dart';
 import '../../services/organization_service.dart';
+import '../../utils/formatters.dart';
 import '../color_picker.dart';
 
 /// Self-contained modal for creating a new organization/projection.
@@ -10,12 +12,18 @@ import '../color_picker.dart';
 class CreateOrganizationModal extends StatefulWidget {
   /// Called after the organization is successfully created.
   final VoidCallback onCreated;
+  final OrganizationModel? organization;
 
-  const CreateOrganizationModal({super.key, required this.onCreated});
+  const CreateOrganizationModal({
+    super.key,
+    required this.onCreated,
+    this.organization,
+  });
 
   static Future<void> show(
     BuildContext context, {
     required VoidCallback onCreated,
+    OrganizationModel? organization,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -33,7 +41,10 @@ class CreateOrganizationModal extends StatefulWidget {
             return Padding(
               padding: EdgeInsets.only(
                   bottom: MediaQuery.of(context).viewInsets.bottom),
-              child: CreateOrganizationModal(onCreated: onCreated),
+              child: CreateOrganizationModal(
+                onCreated: onCreated,
+                organization: organization,
+              ),
             );
           },
         );
@@ -56,9 +67,22 @@ class _CreateOrganizationModalState extends State<CreateOrganizationModal> {
   bool _isInstallment = false;
   int _installments = 2;
 
+  bool get _isEditing => widget.organization != null;
+
   @override
   void initState() {
     super.initState();
+    final initial = widget.organization;
+    if (initial != null) {
+      _nameController.text = initial.name;
+      _valueController.text = formatCurrency(initial.quantity);
+      _selectedColor =
+          initial.color != null ? Color(initial.color!) : const Color(0xFF3B82F6);
+      _isInstallment = (initial.installments ?? 0) > 1;
+      _installments = initial.installments ?? 2;
+      _installmentsController.text = _installments.toString();
+    }
+
     _hexController = TextEditingController(
       text:
           '#${_selectedColor.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
@@ -89,8 +113,7 @@ class _CreateOrganizationModalState extends State<CreateOrganizationModal> {
 
   Future<void> _create() async {
     final name = _nameController.text.trim();
-    final value =
-        double.tryParse(_valueController.text.replaceAll(',', '.')) ?? 0;
+    final value = parseCurrencyInput(_valueController.text);
 
     if (name.isEmpty || value <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -99,19 +122,24 @@ class _CreateOrganizationModalState extends State<CreateOrganizationModal> {
       return;
     }
 
-    final installments = _isInstallment ? _installments : 1;
+    final installments = _isInstallment ? _installments : null;
 
     final org = OrganizationModel(
+      id: widget.organization?.id,
       name: name,
       quantity: value,
-      description: '',
-      createdAt: DateTime.now(),
-      completed: false,
+      description: widget.organization?.description ?? '',
+      createdAt: widget.organization?.createdAt ?? DateTime.now(),
+      completed: widget.organization?.completed ?? false,
       color: _selectedColor.toARGB32(),
       installments: installments,
     );
 
-    await OrganizationService.insert(org);
+    if (_isEditing) {
+      await OrganizationService.edit(org);
+    } else {
+      await OrganizationService.insert(org);
+    }
 
     final categoryId = await CategoryService.getOrCreate(name, 'expense');
     await CategoryService.update(categoryId, name, _selectedColor.toARGB32());
@@ -126,8 +154,7 @@ class _CreateOrganizationModalState extends State<CreateOrganizationModal> {
     final previewName = _nameController.text.trim().isEmpty
         ? 'Nome da Projeção'
         : _nameController.text.trim();
-    final previewValue =
-        double.tryParse(_valueController.text.replaceAll(',', '.')) ?? 0;
+    final previewValue = parseCurrencyInput(_valueController.text);
     final perMonthValue =
         previewValue / (_isInstallment && _installments > 0 ? _installments : 1);
 
@@ -141,9 +168,10 @@ class _CreateOrganizationModalState extends State<CreateOrganizationModal> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Nova Projeção',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Text(
+                  _isEditing ? 'Editar Projeção' : 'Nova Projeção',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
                 IconButton(
                   onPressed: () => Navigator.of(context).pop(),
                   icon: const Icon(Icons.close),
@@ -170,8 +198,11 @@ class _CreateOrganizationModalState extends State<CreateOrganizationModal> {
               onChanged: (_) => setState(() {}),
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                CurrencyInputFormatter(),
+              ],
               decoration: const InputDecoration(
-                prefixText: 'R\$ ',
                 hintText: '0,00',
                 border: OutlineInputBorder(),
                 isDense: true,
@@ -179,7 +210,10 @@ class _CreateOrganizationModalState extends State<CreateOrganizationModal> {
             ),
             const SizedBox(height: 16),
             ColorPicker(
-                color: _selectedColor, onColorChanged: _onColorChanged),
+              color: _selectedColor,
+              onColorChanged: _onColorChanged,
+              pickerHeight: 120,
+            ),
             const SizedBox(height: 12),
             TextField(
               controller: _hexController,
@@ -275,7 +309,7 @@ class _CreateOrganizationModalState extends State<CreateOrganizationModal> {
                                     fontWeight: FontWeight.bold)),
                             const SizedBox(height: 4),
                             Text(
-                              'R\$ ${previewValue.toStringAsFixed(2)}',
+                              formatCurrency(previewValue),
                               style:
                                   TextStyle(color: _selectedColor),
                             ),
@@ -287,7 +321,7 @@ class _CreateOrganizationModalState extends State<CreateOrganizationModal> {
                   if (_isInstallment) ...[
                     const SizedBox(height: 12),
                     Text(
-                      'Por mês: R\$ ${perMonthValue.toStringAsFixed(2)}',
+                      'Por mês: ${formatCurrency(perMonthValue)}',
                       style: TextStyle(color: _selectedColor),
                     ),
                   ],
@@ -306,9 +340,13 @@ class _CreateOrganizationModalState extends State<CreateOrganizationModal> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16)),
                 ),
-                child: const Text('Criar Projeção',
-                    style: TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold)),
+                child: Text(
+                  _isEditing ? 'Salvar Projeção' : 'Criar Projeção',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 16),

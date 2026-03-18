@@ -7,12 +7,14 @@ class OrganizationCard extends StatelessWidget {
   final OrganizationModel org;
   final VoidCallback onDelete;
   final VoidCallback onComplete;
+  final VoidCallback? onEdit;
 
   const OrganizationCard({
     super.key,
     required this.org,
     required this.onDelete,
     required this.onComplete,
+    this.onEdit,
   });
 
   @override
@@ -20,24 +22,24 @@ class OrganizationCard extends StatelessWidget {
     final color =
         org.color != null ? Color(org.color!) : const Color(0xFF3B82F6);
     final reserveValue = org.quantity;
-    final months = org.installments > 1 ? org.installments : 1;
-    final monthlyValue = reserveValue / months;
+    final isInstallment = (org.installments ?? 0) > 1;
+    final months = org.installments ?? 1;
+    final secondLabel = isInstallment ? 'Por mês' : 'Valor após';
+    final secondValue = isInstallment ? reserveValue / months : reserveValue;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 18),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
+      child: Material(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha((0.05 * 255).round()),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
+        shadowColor: Colors.black.withAlpha((0.05 * 255).round()),
+        elevation: 2,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onEdit,
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -64,9 +66,13 @@ class OrganizationCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(org.name,
-                        style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text(
+                      org.name,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       'Criado em '
@@ -78,9 +84,13 @@ class OrganizationCard extends StatelessWidget {
                   ],
                 ),
               ),
-              GestureDetector(
+              InkWell(
+                borderRadius: BorderRadius.circular(20),
                 onTap: onDelete,
-                child: const Icon(Icons.close, color: Colors.redAccent),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.close, color: Colors.redAccent),
+                ),
               ),
             ],
           ),
@@ -106,10 +116,9 @@ class OrganizationCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Por mês',
-                        style: TextStyle(color: Colors.grey)),
+                    Text(secondLabel, style: const TextStyle(color: Colors.grey)),
                     const SizedBox(height: 4),
-                    Text(formatCurrency(monthlyValue),
+                    Text(formatCurrency(secondValue),
                         style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -133,6 +142,9 @@ class OrganizationCard extends StatelessWidget {
                 style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
+            ),
+          ),
+        ),
       ),
     );
   }

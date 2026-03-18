@@ -11,6 +11,9 @@ class OrganizationService {
   static Future<int> update(OrganizationModel organization) =>
       DatabaseHelper.instance.updateOrganization(organization);
 
+  static Future<int> edit(OrganizationModel organization) =>
+      update(organization);
+
   static Future<int> delete(int id) =>
       DatabaseHelper.instance.deleteOrganization(id);
 }

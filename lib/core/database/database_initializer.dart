@@ -8,7 +8,7 @@ import 'tables/organization_table.dart';
 import 'tables/transactions_table.dart';
 
 class DatabaseInitializer {
-  static const int version = 7;
+  static const int version = 8;
 
   static Future<Database> initialize(String filePath) async {
     final dbPath = await getDatabasesPath();

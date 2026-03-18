@@ -93,7 +93,10 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
     );
 
     final now = DateTime.now();
-    final totalInstallments = org.installments > 1 ? org.installments : 1;
+    final totalInstallments =
+      (org.installments != null && org.installments! > 1)
+        ? org.installments!
+        : 1;
 
     if (totalInstallments > 1) {
       final baseValue = org.quantity / totalInstallments;
@@ -179,6 +182,15 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
                     ..._organizations.map(
                       (org) => OrganizationCard(
                         org: org,
+                        onEdit: () {
+                          CreateOrganizationModal.show(
+                            context,
+                            organization: org,
+                            onCreated: () {
+                              _loadOrganizations();
+                            },
+                          );
+                        },
                         onDelete: () {
                           if (org.id != null) {
                             _deleteOrganization(org.id!);
@@ -289,7 +301,10 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
             Expanded(
               child: Text(
                 title,
-                style: const TextStyle(fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -299,7 +314,7 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
         Text(
           value,
           style: TextStyle(
-            fontSize: 22,
+            fontSize: 18,
             fontWeight: FontWeight.bold,
             color: valueColor,
           ),

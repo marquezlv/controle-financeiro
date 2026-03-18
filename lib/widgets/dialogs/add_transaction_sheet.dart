@@ -1,10 +1,12 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../models/transaction_model.dart';
 import '../../services/category_service.dart';
 import '../../services/transaction_service.dart';
+import '../../utils/formatters.dart';
 import '../../utils/installment_utils.dart';
 import 'add_category_sheet.dart';
 
@@ -57,7 +59,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     final initial = widget.transaction;
     if (initial != null) {
       _type = initial.type;
-      _valueController.text = initial.quantity.toStringAsFixed(2);
+      _valueController.text = formatCurrency(initial.quantity);
       _descController.text = initial.description;
       selectedCategoryId = initial.categoryId;
       _selectedDate = initial.date;
@@ -79,9 +81,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
   Future<void> _save() async {
     if (_valueController.text.isEmpty) return;
-    final value =
-        double.tryParse(_valueController.text.replaceAll(',', '.'));
-    if (value == null) return;
+    final value = parseCurrencyInput(_valueController.text);
+    if (value <= 0) return;
 
     final name = _descController.text.isEmpty
         ? 'Sem descrição'
@@ -237,6 +238,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 controller: _valueController,
                 keyboardType: const TextInputType.numberWithOptions(
                     decimal: true),
+                inputFormatters: <TextInputFormatter>[
+                  FilteringTextInputFormatter.digitsOnly,
+                  CurrencyInputFormatter(),
+                ],
                 decoration:
                     const InputDecoration(labelText: 'Valor'),
               ),

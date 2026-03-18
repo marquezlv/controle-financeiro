@@ -13,7 +13,7 @@ CREATE TABLE $table (
   createdAt TEXT NOT NULL,
   completed INTEGER NOT NULL,
   color INTEGER,
-  installments INTEGER NOT NULL DEFAULT 1
+  installments INTEGER
 )
 ''');
   }

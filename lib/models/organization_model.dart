@@ -6,7 +6,7 @@ class OrganizationModel {
   final DateTime createdAt;
   final bool completed;
   final int? color;
-  final int installments;
+  final int? installments;
 
   OrganizationModel({
     this.id,
@@ -16,7 +16,7 @@ class OrganizationModel {
     required this.createdAt,
     required this.completed,
     this.color,
-    this.installments = 1,
+    this.installments,
   });
 
   Map<String, dynamic> toMap() {
@@ -41,9 +41,7 @@ class OrganizationModel {
       createdAt: DateTime.parse(map['createdAt']),
       completed: map['completed'] == 1,
       color: map.containsKey('color') ? map['color'] as int? : null,
-      installments: map.containsKey('installments')
-          ? (map['installments'] as int? ?? 1)
-          : 1,
+      installments: map['installments'] as int?,
     );
   }
 }

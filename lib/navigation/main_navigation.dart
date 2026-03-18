@@ -4,6 +4,7 @@ import '../screens/expense_screen.dart';
 import '../widgets/dialogs/add_transaction_sheet.dart';
 import '../screens/income_screen.dart';
 import '../screens/organization_screen.dart';
+import 'suspense_menu.dart';
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -14,7 +15,8 @@ class MainNavigation extends StatefulWidget {
 
 class _MainNavigationState extends State<MainNavigation> {
   final GlobalKey<HomeScreenState> homeKey = GlobalKey<HomeScreenState>();
-  final GlobalKey<ExpenseScreenState> expenseKey = GlobalKey<ExpenseScreenState>();
+  final GlobalKey<ExpenseScreenState> expenseKey =
+      GlobalKey<ExpenseScreenState>();
   final GlobalKey<IncomeScreenState> incomeKey = GlobalKey<IncomeScreenState>();
 
   int _currentIndex = 0;
@@ -67,7 +69,25 @@ class _MainNavigationState extends State<MainNavigation> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_currentIndex],
+      drawer: SuspenseMenuDrawer(
+        selectedIndex: _currentIndex,
+        onNavigate: _changePage,
+      ),
+      body: Stack(
+        children: [
+          _screens[_currentIndex],
+
+          Positioned(
+            top: 0,
+            right: 0,
+            child: Builder(
+              builder: (context) => SuspenseMenuButton(
+                onPressed: () => Scaffold.of(context).openDrawer(),
+              ),
+            ),
+          ),
+        ],
+      ),
 
       floatingActionButton: FloatingActionButton(
         backgroundColor: Color(0xFF2F6BFF),

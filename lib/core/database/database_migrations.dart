@@ -5,6 +5,7 @@ import 'migrations/migration_v4.dart';
 import 'migrations/migration_v5.dart';
 import 'migrations/migration_v6.dart';
 import 'migrations/migration_v7.dart';
+import 'migrations/migration_v8.dart';
 
 class DatabaseMigrations {
   static Future<void> ensureRequiredColumns(Database db) async {
@@ -51,7 +52,7 @@ class DatabaseMigrations {
 
     if (!orgCols.contains('installments')) {
       await db.execute(
-        'ALTER TABLE organizations ADD COLUMN installments INTEGER NOT NULL DEFAULT 1',
+        'ALTER TABLE organizations ADD COLUMN installments INTEGER',
       );
     }
   }
@@ -75,6 +76,10 @@ class DatabaseMigrations {
 
     if (oldVersion < 7) {
       await MigrationV7.run(db);
+    }
+
+    if (oldVersion < 8) {
+      await MigrationV8.run(db);
     }
   }
 }

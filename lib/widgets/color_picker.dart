@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 class ColorPicker extends StatefulWidget {
   final Color color;
   final ValueChanged<Color> onColorChanged;
+  final double pickerHeight;
 
   const ColorPicker({
     super.key,
     required this.color,
     required this.onColorChanged,
+    this.pickerHeight = 180,
   });
 
   @override
@@ -58,7 +60,7 @@ class _ColorPickerState extends State<ColorPicker> {
         const SizedBox(height: 10),
         LayoutBuilder(
           builder: (context, constraints) {
-            final size = Size(constraints.maxWidth, 180);
+            final size = Size(constraints.maxWidth, widget.pickerHeight);
             return GestureDetector(
               onPanDown: (event) =>
                   _onSaturationValueChanged(event.localPosition, size),
