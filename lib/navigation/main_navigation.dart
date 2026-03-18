@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../screens/home_sreen.dart';
+import '../screens/home_screen.dart';
 import '../screens/expense_screen.dart';
 import '../widgets/dialogs/add_transaction_sheet.dart';
 import '../screens/income_screen.dart';
