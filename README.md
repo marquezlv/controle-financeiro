@@ -71,13 +71,26 @@ app-release.apk
 ## 📂 Project Structure
 
 lib/
-├── core/database
-├── models
-├── navigation
-├── screens
-├── utils
-├── widgets
-└── main.dart
+├── core/
+│   └── database/
+│       ├── migrations/
+│       └── tables/
+├── models/
+├── navigation/
+├── screens/
+├── services/
+├── utils/
+└── widgets/
+    ├── category/
+    ├── charts/
+    ├── dialogs/
+    ├── expense/
+    ├── home/
+    ├── income/
+    ├── organization/
+    ├── project/
+    ├── shared/
+    └── transaction/
 
 ---
 
