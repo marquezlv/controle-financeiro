@@ -13,7 +13,9 @@ CREATE TABLE $table (
   createdAt TEXT NOT NULL,
   completed INTEGER NOT NULL,
   color INTEGER,
-  installments INTEGER
+  installments INTEGER,
+  projectId INTEGER NOT NULL DEFAULT 1,
+  FOREIGN KEY (projectId) REFERENCES projects (id)
 )
 ''');
   }

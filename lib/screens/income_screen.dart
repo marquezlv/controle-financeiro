@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/transaction_model.dart';
+import '../services/project_service.dart';
 import '../services/transaction_service.dart';
 import '../utils/formatters.dart';
 import '../widgets/shared/amount_card.dart';
@@ -17,6 +18,7 @@ class IncomeScreen extends StatefulWidget {
 class IncomeScreenState extends State<IncomeScreen> {
   List<TransactionModel> _transactions = [];
   double _totalIncome = 0;
+  String _currencyCode = 'BRL';
 
   Map<String, double> _categoryTotals = {};
   final Map<String, int> _categoryColors = {}; // store the color for each category name
@@ -26,9 +28,11 @@ class IncomeScreenState extends State<IncomeScreen> {
 
   Future<void> _loadTransactions() async {
     final data = await TransactionService.getAll();
+    final currencyCode = await ProjectService.getActiveCurrencyCode();
 
     setState(() {
       _transactions = data;
+      _currencyCode = currencyCode;
     });
 
     _calculateIncome();
@@ -155,6 +159,7 @@ class IncomeScreenState extends State<IncomeScreen> {
                       categoryTotals: _categoryTotals,
                       categoryColors: _categoryColors,
                       total: _totalIncome,
+                      currencyCode: _currencyCode,
                     ),
 
                     SizedBox(height: 30),
@@ -231,7 +236,7 @@ class IncomeScreenState extends State<IncomeScreen> {
   Widget _buildTotalIncomeCard() {
     return AmountCard(
       title: 'Ganhos Totais',
-      amount: formatCurrency(_totalIncome),
+      amount: formatCurrencyForCode(_totalIncome, _currencyCode),
       gradient: LinearGradient(
         colors: [Color(0xFF00C853), Color(0xFF00E676)],
       ),
@@ -270,6 +275,7 @@ class IncomeScreenState extends State<IncomeScreen> {
             ...transactions.map((item) {
               return TransactionTile(
                 transaction: item,
+                currencyCode: _currencyCode,
                 onDelete: () => _deleteTransaction(item),
               );
             }),

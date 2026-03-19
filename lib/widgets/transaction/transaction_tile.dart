@@ -4,12 +4,14 @@ import '../../utils/formatters.dart';
 
 class TransactionTile extends StatelessWidget {
   final TransactionModel transaction;
+  final String currencyCode;
   final VoidCallback? onDelete;
   final VoidCallback? onTap;
 
   const TransactionTile({
     super.key,
     required this.transaction,
+    this.currencyCode = 'BRL',
     this.onDelete,
     this.onTap,
   });
@@ -42,7 +44,7 @@ class TransactionTile extends StatelessWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(formatCurrency(transaction.quantity),
+            Text(formatCurrencyForCode(transaction.quantity, currencyCode),
                 style:
                     TextStyle(color: color, fontWeight: FontWeight.bold)),
             if (onDelete != null) ...[

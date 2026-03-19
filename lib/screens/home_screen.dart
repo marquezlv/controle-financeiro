@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import '../models/transaction_model.dart';
+import '../services/project_service.dart';
 import '../services/transaction_service.dart';
 import '../utils/formatters.dart';
 import '../widgets/charts/year_bar_chart.dart';
@@ -21,6 +22,7 @@ class HomeScreen extends StatefulWidget {
 
 class HomeScreenState extends State<HomeScreen> {
   List<TransactionModel> _transactions = [];
+  String _currencyCode = 'BRL';
 
   double _totalIncome = 0;
   double _totalExpense = 0;
@@ -64,9 +66,11 @@ class HomeScreenState extends State<HomeScreen> {
 
   Future<void> loadTransactions() async {
     final data = await TransactionService.getAll();
+    final currencyCode = await ProjectService.getActiveCurrencyCode();
 
     setState(() {
       _transactions = data;
+      _currencyCode = currencyCode;
     });
 
     _calculateTotals();
@@ -279,7 +283,7 @@ class HomeScreenState extends State<HomeScreen> {
   Widget _buildBalanceCard() {
     return AmountCard(
       title: 'Saldo Total',
-      amount: formatCurrency(_balance),
+      amount: formatCurrencyForCode(_balance, _currencyCode),
       gradient: const LinearGradient(
         colors: [Color(0xFF2F6BFF), Color(0xFF1E4ED8)],
       ),
@@ -292,7 +296,7 @@ class HomeScreenState extends State<HomeScreen> {
         Expanded(
           child: AmountCard(
             title: 'Ganhos',
-            amount: formatCurrency(_totalIncome),
+            amount: formatCurrencyForCode(_totalIncome, _currencyCode),
             backgroundColor: Colors.white,
             amountColor: Colors.green,
             amountFontSize: 20,
@@ -302,7 +306,7 @@ class HomeScreenState extends State<HomeScreen> {
         Expanded(
           child: AmountCard(
             title: 'Gastos',
-            amount: formatCurrency(_totalExpense),
+            amount: formatCurrencyForCode(_totalExpense, _currencyCode),
             backgroundColor: Colors.white,
             amountColor: Colors.red,
             amountFontSize: 20,
@@ -355,6 +359,7 @@ class HomeScreenState extends State<HomeScreen> {
             ...transactions.map((item) {
               return TransactionTile(
                 transaction: item,
+                currencyCode: _currencyCode,
                 onTap: () => _editTransaction(item),
                 onDelete: () => _deleteTransaction(item),
               );

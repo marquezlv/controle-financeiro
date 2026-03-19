@@ -1,6 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import '../../models/transaction_model.dart';
 import '../../models/organization_model.dart';
+import '../../models/project_model.dart';
 import 'database_initializer.dart';
 
 class DatabaseHelper {
@@ -71,6 +72,17 @@ class DatabaseHelper {
     return result.map((e) => OrganizationModel.fromMap(e)).toList();
   }
 
+  Future<List<OrganizationModel>> getOrganizationsByProject(int projectId) async {
+    final db = await database;
+    final result = await db.query(
+      'organizations',
+      where: 'projectId = ?',
+      whereArgs: [projectId],
+      orderBy: 'createdAt DESC',
+    );
+    return result.map((e) => OrganizationModel.fromMap(e)).toList();
+  }
+
   Future<int> updateOrganization(OrganizationModel organization) async {
     final db = await instance.database;
     return await db.update(
@@ -137,5 +149,65 @@ class DatabaseHelper {
       'categories',
       {'name': name, 'type': type, 'hidden': 1},
     );
+  }
+
+  // Project methods
+  Future<int> insertProject(String name, String currencyCode) async {
+    final db = await database;
+    return await db.insert(
+      'projects',
+      {
+        'name': name,
+        'currencyCode': currencyCode,
+        'createdAt': DateTime.now().toIso8601String(),
+        'order': 0,
+      },
+    );
+  }
+
+  Future<List<ProjectModel>> getAllProjects() async {
+    final db = await database;
+    final result = await db.query('projects', orderBy: '"order" ASC, createdAt ASC');
+    return result.map((e) => ProjectModel.fromMap(e)).toList();
+  }
+
+  Future<ProjectModel?> getProjectById(int id) async {
+    final db = await database;
+    final result = await db.query('projects', where: 'id = ?', whereArgs: [id], limit: 1);
+    if (result.isEmpty) return null;
+    return ProjectModel.fromMap(result.first);
+  }
+
+  Future<int> updateProject(int id, String name, String currencyCode) async {
+    final db = await database;
+    return await db.update(
+      'projects',
+      {'name': name, 'currencyCode': currencyCode},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<int> deleteProject(int id) async {
+    final db = await database;
+    return await db.delete('projects', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<List<TransactionModel>> getTransactionsByProject(int projectId) async {
+    final db = await database;
+
+    final result = await db.rawQuery('''
+  SELECT 
+    t.*,
+    c.name as categoryName,
+    c.color as categoryColor
+  FROM transactions t
+  LEFT JOIN categories c 
+  ON c.id = t.categoryId
+  WHERE t.projectId = ?
+  ORDER BY t.date DESC
+  ''', [projectId]);
+
+    return result.map((e) => TransactionModel.fromMap(e)).toList();
   }
 }

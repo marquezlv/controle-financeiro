@@ -6,6 +6,8 @@ import 'migrations/migration_v5.dart';
 import 'migrations/migration_v6.dart';
 import 'migrations/migration_v7.dart';
 import 'migrations/migration_v8.dart';
+import 'migrations/migration_v9.dart';
+import 'migrations/migration_v10.dart';
 
 class DatabaseMigrations {
   static Future<void> ensureRequiredColumns(Database db) async {
@@ -55,9 +57,31 @@ class DatabaseMigrations {
         'ALTER TABLE organizations ADD COLUMN installments INTEGER',
       );
     }
+
+    final txProjInfo = await db.rawQuery("PRAGMA table_info(transactions)");
+    final txProjCols = txProjInfo.map((r) => r['name'] as String).toSet();
+
+    if (!txProjCols.contains('projectId')) {
+      await db.execute(
+        'ALTER TABLE transactions ADD COLUMN projectId INTEGER NOT NULL DEFAULT 1',
+      );
+      // Ensure projects table exists with default project
+      final projectInfo = await db.rawQuery("PRAGMA table_info(projects)");
+      if (projectInfo.isEmpty) {
+        await db.execute('''CREATE TABLE projects (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          currencyCode TEXT NOT NULL DEFAULT 'BRL',
+          createdAt TEXT NOT NULL,
+          "order" INTEGER NOT NULL DEFAULT 0
+        )''');
+        await db.execute('''INSERT INTO projects (name, currencyCode, createdAt, "order")
+          VALUES ('Meu Orçamento', 'BRL', datetime('now'), 0)''');
+      }
+    }
   }
 
-  static Future upgradeDB(Database db, int oldVersion, int newVersion) async {
+  static Future<void> upgradeDB(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 3) {
       await MigrationV3.run(db);
     }
@@ -80,6 +104,14 @@ class DatabaseMigrations {
 
     if (oldVersion < 8) {
       await MigrationV8.run(db);
+    }
+
+    if (oldVersion < 9) {
+      await MigrationV9.run(db);
+    }
+
+    if (oldVersion < 10) {
+      await MigrationV10.run(db);
     }
   }
 }

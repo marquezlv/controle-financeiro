@@ -6,6 +6,7 @@ class TransactionModel {
   double quantity;
   String description;
   int categoryId;
+  int projectId; // Project this transaction belongs to
   DateTime date;
   TransactionType type;
 
@@ -24,6 +25,7 @@ class TransactionModel {
     required this.quantity,
     required this.description,
     required this.categoryId,
+    this.projectId = 1, // Default to project 1 (Meu Orçamento)
     required this.date,
     required this.type,
     this.isInstallment = false,
@@ -41,6 +43,7 @@ class TransactionModel {
       'quantity': quantity,
       'description': description,
       'categoryId': categoryId,
+      'projectId': projectId,
       'date': date.toIso8601String(),
       'type': type.name,
       'isInstallment': isInstallment ? 1 : 0,
@@ -57,6 +60,7 @@ class TransactionModel {
       quantity: map['quantity'],
       description: map['description'] ?? '',
       categoryId: map['categoryId'],
+      projectId: map['projectId'] ?? 1,
       date: DateTime.parse(map['date']),
       type: map['type'] == 'income'
           ? TransactionType.income

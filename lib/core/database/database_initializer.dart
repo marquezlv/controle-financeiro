@@ -5,10 +5,11 @@ import 'database_migrations.dart';
 import 'database_seed.dart';
 import 'tables/categories_table.dart';
 import 'tables/organization_table.dart';
+import 'tables/projects_table.dart';
 import 'tables/transactions_table.dart';
 
 class DatabaseInitializer {
-  static const int version = 8;
+  static const int version = 10;
 
   static Future<Database> initialize(String filePath) async {
     final dbPath = await getDatabasesPath();
@@ -27,9 +28,15 @@ class DatabaseInitializer {
   }
 
   static Future<void> _createDB(Database db, int version) async {
+    await ProjectsTable.create(db);
     await CategoriesTable.create(db);
     await TransactionsTable.create(db);
     await OrganizationsTable.create(db);
     await DatabaseSeed.ensureDefaultCategories(db);
+    // Insert default project for new installations
+    await db.execute('''
+      INSERT INTO projects (name, currencyCode, createdAt, "order")
+      VALUES ('Meu Orçamento', 'BRL', datetime('now'), 0)
+    ''');
   }
 }

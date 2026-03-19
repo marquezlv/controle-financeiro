@@ -1,9 +1,13 @@
 import '../core/database/database_helper.dart';
+import '../core/project_context.dart';
 import '../models/organization_model.dart';
 
 class OrganizationService {
   static Future<List<OrganizationModel>> getAll() =>
-      DatabaseHelper.instance.getAllOrganizations();
+      getByProject(ProjectContext.getActiveProjectId());
+
+  static Future<List<OrganizationModel>> getByProject(int projectId) =>
+      DatabaseHelper.instance.getOrganizationsByProject(projectId);
 
   static Future<int> insert(OrganizationModel organization) =>
       DatabaseHelper.instance.insertOrganization(organization);

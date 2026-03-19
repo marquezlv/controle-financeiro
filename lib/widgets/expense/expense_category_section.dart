@@ -8,12 +8,14 @@ class ExpenseCategorySection extends StatelessWidget {
   final Map<String, double> categoryTotals;
   final Map<String, int> categoryColors;
   final double total;
+  final String currencyCode;
 
   const ExpenseCategorySection({
     super.key,
     required this.categoryTotals,
     required this.categoryColors,
     required this.total,
+    required this.currencyCode,
   });
 
   @override
@@ -42,7 +44,7 @@ class ExpenseCategorySection extends StatelessWidget {
                   : palette[i % palette.length];
             }),
             labels: entries.map((e) => e.key).toList(),
-            centerText: formatCurrency(total),
+            centerText: formatCurrencyForCode(total, currencyCode),
           ),
         ),
         const SizedBox(height: 20),

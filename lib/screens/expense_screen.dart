@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/transaction_model.dart';
+import '../services/project_service.dart';
 import '../services/transaction_service.dart';
 import '../utils/formatters.dart';
 import '../widgets/expense/expense_category_section.dart';
@@ -17,6 +18,7 @@ class ExpenseScreen extends StatefulWidget {
 class ExpenseScreenState extends State<ExpenseScreen> {
   List<TransactionModel> _transactions = [];
   double _totalExpense = 0;
+  String _currencyCode = 'BRL';
 
   Map<String, double> _categoryTotals = {};
   final Map<String, int> _categoryColors = {};
@@ -47,9 +49,11 @@ class ExpenseScreenState extends State<ExpenseScreen> {
 
   Future<void> _loadTransactions() async {
     final data = await TransactionService.getAll();
+    final currencyCode = await ProjectService.getActiveCurrencyCode();
 
     setState(() {
       _transactions = data;
+      _currencyCode = currencyCode;
     });
 
     _calculateExpenses();
@@ -139,6 +143,7 @@ class ExpenseScreenState extends State<ExpenseScreen> {
                       categoryTotals: _categoryTotals,
                       categoryColors: _categoryColors,
                       total: _totalExpense,
+                      currencyCode: _currencyCode,
                     ),
                     const SizedBox(height: 30),
                     _buildTransactionSection(),
@@ -211,7 +216,7 @@ class ExpenseScreenState extends State<ExpenseScreen> {
   Widget _buildTotalExpenseCard() {
     return AmountCard(
       title: 'Gasto Total',
-      amount: formatCurrency(_totalExpense),
+      amount: formatCurrencyForCode(_totalExpense, _currencyCode),
       gradient: const LinearGradient(
         colors: [Color(0xFFFF6B6B), Color(0xFFE53935)],
       ),
@@ -247,6 +252,7 @@ class ExpenseScreenState extends State<ExpenseScreen> {
             ...transactions.map((item) {
               return TransactionTile(
                 transaction: item,
+                currencyCode: _currencyCode,
                 onDelete: () => _deleteTransaction(item),
               );
             }),

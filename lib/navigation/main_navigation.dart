@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/project_model.dart';
 import '../screens/home_screen.dart';
 import '../screens/expense_screen.dart';
 import '../widgets/dialogs/add_transaction_sheet.dart';
@@ -18,6 +19,8 @@ class _MainNavigationState extends State<MainNavigation> {
   final GlobalKey<ExpenseScreenState> expenseKey =
       GlobalKey<ExpenseScreenState>();
   final GlobalKey<IncomeScreenState> incomeKey = GlobalKey<IncomeScreenState>();
+    final GlobalKey<OrganizationScreenState> organizationKey =
+      GlobalKey<OrganizationScreenState>();
 
   int _currentIndex = 0;
 
@@ -25,13 +28,25 @@ class _MainNavigationState extends State<MainNavigation> {
     HomeScreen(key: homeKey),
     ExpenseScreen(key: expenseKey),
     IncomeScreen(key: incomeKey),
-    OrganizationScreen(),
+    OrganizationScreen(key: organizationKey),
   ];
 
   void _changePage(int index) {
     setState(() {
       _currentIndex = index;
     });
+  }
+
+  void _onProjectSelected(ProjectModel project) {
+    // When a project is selected from the menu, reload screens context
+    setState(() {
+      _currentIndex = 0; // Go to home screen
+    });
+    // Trigger reload of screens to show new project data
+    homeKey.currentState?.loadTransactions();
+    expenseKey.currentState?.reload();
+    incomeKey.currentState?.reload();
+    organizationKey.currentState?.reload();
   }
 
   void _openAddTransactionModal() async {
@@ -70,13 +85,11 @@ class _MainNavigationState extends State<MainNavigation> {
   Widget build(BuildContext context) {
     return Scaffold(
       drawer: SuspenseMenuDrawer(
-        selectedIndex: _currentIndex,
-        onNavigate: _changePage,
+        onProjectSelected: _onProjectSelected,
       ),
       body: Stack(
         children: [
           _screens[_currentIndex],
-
           Positioned(
             top: 0,
             right: 0,
@@ -88,15 +101,12 @@ class _MainNavigationState extends State<MainNavigation> {
           ),
         ],
       ),
-
       floatingActionButton: FloatingActionButton(
         backgroundColor: Color(0xFF2F6BFF),
         onPressed: _openAddTransactionModal,
         child: Icon(Icons.add),
       ),
-
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-
       bottomNavigationBar: BottomAppBar(
         shape: CircularNotchedRectangle(),
         notchMargin: 8,
@@ -109,19 +119,15 @@ class _MainNavigationState extends State<MainNavigation> {
                 icon: Icon(Icons.home),
                 onPressed: () => _changePage(0),
               ),
-
               IconButton(
                 icon: Icon(Icons.trending_down),
                 onPressed: () => _changePage(1),
               ),
-
               SizedBox(width: 40),
-
               IconButton(
                 icon: Icon(Icons.trending_up),
                 onPressed: () => _changePage(2),
               ),
-
               IconButton(
                 icon: Icon(Icons.folder),
                 onPressed: () => _changePage(3),

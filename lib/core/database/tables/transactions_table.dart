@@ -11,13 +11,15 @@ CREATE TABLE $table (
   quantity REAL NOT NULL,
   description TEXT,
   categoryId INTEGER,
+  projectId INTEGER NOT NULL DEFAULT 1,
   date TEXT NOT NULL,
   type TEXT NOT NULL,
   isInstallment INTEGER NOT NULL DEFAULT 0,
   installmentNumber INTEGER,
   totalInstallments INTEGER,
   installmentGroupId TEXT,
-  FOREIGN KEY (categoryId) REFERENCES categories (id)
+  FOREIGN KEY (categoryId) REFERENCES categories (id),
+  FOREIGN KEY (projectId) REFERENCES projects (id)
 )
 ''');
   }

@@ -1,10 +1,12 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import '../core/project_context.dart';
 import '../models/organization_model.dart';
 import '../models/transaction_model.dart';
 import '../services/category_service.dart';
 import '../services/organization_service.dart';
+import '../services/project_service.dart';
 import '../services/transaction_service.dart';
 import '../utils/formatters.dart';
 import '../utils/installment_utils.dart';
@@ -15,25 +17,42 @@ class OrganizationScreen extends StatefulWidget {
   const OrganizationScreen({super.key});
 
   @override
-  State<OrganizationScreen> createState() => _OrganizationScreenState();
+  OrganizationScreenState createState() => OrganizationScreenState();
 }
 
-class _OrganizationScreenState extends State<OrganizationScreen> {
+class OrganizationScreenState extends State<OrganizationScreen> {
   List<TransactionModel> _transactions = [];
   List<OrganizationModel> _organizations = [];
   double _currentBalance = 0;
   double _reservedTotal = 0;
   int _maxInstallments = 1;
+  String _currencyCode = 'BRL';
 
   @override
   void initState() {
     super.initState();
+    _loadCurrency();
     _loadData();
+  }
+
+  Future<void> _loadCurrency() async {
+    final projectId = ProjectContext.getActiveProjectId();
+    final project = await ProjectService.getById(projectId);
+    if (project != null && mounted) {
+      setState(() {
+        _currencyCode = project.currencyCode;
+      });
+    }
   }
 
   Future<void> _loadData() async {
     await _loadTransactions();
     await _loadOrganizations();
+  }
+
+  Future<void> reload() async {
+    await _loadCurrency();
+    await _loadData();
   }
 
   Future<void> _loadTransactions() async {
@@ -64,7 +83,8 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
         expense += t.quantity;
       }
 
-      if (t.totalInstallments != null && t.totalInstallments! > maxInstallments) {
+      if (t.totalInstallments != null &&
+          t.totalInstallments! > maxInstallments) {
         maxInstallments = t.totalInstallments!;
       }
     }
@@ -94,7 +114,7 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
 
     final now = DateTime.now();
     final totalInstallments =
-      (org.installments != null && org.installments! > 1)
+        (org.installments != null && org.installments! > 1)
         ? org.installments!
         : 1;
 
@@ -109,8 +129,9 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
 
       for (var i = 1; i <= totalInstallments; i++) {
         final installmentDate = addMonths(now, i - 1);
-        final amount =
-            i == totalInstallments ? lastInstallmentValue : installmentValue;
+        final amount = i == totalInstallments
+            ? lastInstallmentValue
+            : installmentValue;
 
         await TransactionService.insert(
           TransactionModel(
@@ -153,7 +174,7 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
   }
 
   String _formatCurrency(double value) {
-    return formatCurrency(value);
+    return formatCurrencyForCode(value, _currencyCode);
   }
 
   @override
@@ -182,6 +203,8 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
                     ..._organizations.map(
                       (org) => OrganizationCard(
                         org: org,
+                        balanceAfterMonths: _currentBalance,
+                        currencyCode: _currencyCode,
                         onEdit: () {
                           CreateOrganizationModal.show(
                             context,
@@ -258,7 +281,8 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
         children: [
           Expanded(
             child: _buildBalanceItem(
-              title: 'Saldo em $_maxInstallments ${_maxInstallments == 1 ? 'mês' : 'meses'}',
+              title:
+                  'Saldo em $_maxInstallments ${_maxInstallments == 1 ? 'mês' : 'meses'}',
               value: _formatCurrency(_currentBalance),
               valueColor: _currentBalance < 0 ? Colors.red : Colors.green,
             ),

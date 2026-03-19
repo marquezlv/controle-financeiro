@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../models/transaction_model.dart';
 import '../../services/category_service.dart';
+import '../../services/project_service.dart';
 import '../../services/transaction_service.dart';
 import '../../utils/formatters.dart';
 import '../../utils/installment_utils.dart';
@@ -32,8 +33,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   TransactionType _type = TransactionType.expense;
   final TextEditingController _valueController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
-  final TextEditingController _installmentsController =
-      TextEditingController();
+  final TextEditingController _installmentsController = TextEditingController();
   int? selectedCategoryId;
   DateTime _selectedDate = DateTime.now();
 
@@ -42,6 +42,21 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   bool _isInstallment = false;
   int _installments = 2;
   int _startDay = min(DateTime.now().day, 28);
+  String _currencyCode = 'BRL';
+
+  Future<void> _loadCurrency() async {
+    final currencyCode = await ProjectService.getActiveCurrencyCode();
+    if (!mounted) return;
+    setState(() {
+      _currencyCode = currencyCode;
+      if (widget.transaction != null) {
+        _valueController.text = formatCurrencyForCode(
+          widget.transaction!.quantity,
+          _currencyCode,
+        );
+      }
+    });
+  }
 
   Future<void> loadCategories() async {
     final data = await CategoryService.getByType(_type.name);
@@ -59,7 +74,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     final initial = widget.transaction;
     if (initial != null) {
       _type = initial.type;
-      _valueController.text = formatCurrency(initial.quantity);
+      _valueController.text = formatCurrencyForCode(
+        initial.quantity,
+        _currencyCode,
+      );
       _descController.text = initial.description;
       selectedCategoryId = initial.categoryId;
       _selectedDate = initial.date;
@@ -68,6 +86,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       _startDay = min(initial.date.day, 28);
     }
     _installmentsController.text = _installments.toString();
+    _loadCurrency();
     loadCategories();
   }
 
@@ -77,6 +96,274 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     _descController.dispose();
     _installmentsController.dispose();
     super.dispose();
+  }
+
+  String _capitalize(String value) {
+    if (value.isEmpty) return value;
+    return '${value[0].toUpperCase()}${value.substring(1)}';
+  }
+
+  DateTime _buildSafeDate({
+    required int year,
+    required int month,
+    required int day,
+  }) {
+    final lastDayOfMonth = DateUtils.getDaysInMonth(year, month);
+    return DateTime(year, month, min(day, lastDayOfMonth));
+  }
+
+  Future<int?> _showMonthPickerDialog({
+    required BuildContext context,
+    required ColorScheme colorScheme,
+    required int selectedMonth,
+  }) async {
+    final months = List.generate(12, (index) => index + 1);
+
+    return showDialog<int>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          title: const Text('Selecione o mês'),
+          content: SizedBox(
+            width: 320,
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: months.map((month) {
+                final isSelected = month == selectedMonth;
+                return SizedBox(
+                  width: 84,
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: isSelected
+                          ? colorScheme.primary.withAlpha((0.12 * 255).round())
+                          : Colors.white,
+                      side: BorderSide(
+                        color: isSelected
+                            ? colorScheme.primary
+                            : colorScheme.outlineVariant,
+                      ),
+                      foregroundColor: isSelected
+                          ? colorScheme.primary
+                          : Colors.black87,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    onPressed: () => Navigator.of(context).pop(month),
+                    child: Text(
+                      _capitalize(
+                        DateFormat.MMM('pt_BR').format(DateTime(2024, month)),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<int?> _showYearPickerDialog({
+    required BuildContext context,
+    required DateTime selectedDate,
+  }) async {
+    return showDialog<int>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          title: const Text('Selecione o ano'),
+          content: SizedBox(
+            width: 320,
+            height: 320,
+            child: YearPicker(
+              firstDate: DateTime(2000),
+              lastDate: DateTime(2100),
+              selectedDate: selectedDate,
+              currentDate: DateTime.now(),
+              onChanged: (date) => Navigator.of(context).pop(date.year),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickTransactionDate() async {
+    final theme = Theme.of(context);
+    final colorScheme = ColorScheme.fromSeed(
+      seedColor: _type == TransactionType.expense
+          ? Colors.redAccent
+          : Colors.green,
+      brightness: Brightness.light,
+    );
+
+    final picked = await showDialog<DateTime>(
+      context: context,
+      builder: (context) {
+        var tempSelectedDate = _selectedDate;
+        var displayedMonth = DateTime(_selectedDate.year, _selectedDate.month);
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> selectMonth() async {
+              final month = await _showMonthPickerDialog(
+                context: context,
+                colorScheme: colorScheme,
+                selectedMonth: displayedMonth.month,
+              );
+
+              if (month == null) return;
+
+              setDialogState(() {
+                displayedMonth = DateTime(displayedMonth.year, month);
+                tempSelectedDate = _buildSafeDate(
+                  year: displayedMonth.year,
+                  month: month,
+                  day: tempSelectedDate.day,
+                );
+              });
+            }
+
+            Future<void> selectYear() async {
+              final year = await _showYearPickerDialog(
+                context: context,
+                selectedDate: tempSelectedDate,
+              );
+
+              if (year == null) return;
+
+              setDialogState(() {
+                displayedMonth = DateTime(year, displayedMonth.month);
+                tempSelectedDate = _buildSafeDate(
+                  year: year,
+                  month: displayedMonth.month,
+                  day: tempSelectedDate.day,
+                );
+              });
+            }
+
+            return Theme(
+              data: theme.copyWith(colorScheme: colorScheme),
+              child: Dialog(
+                backgroundColor: Colors.white,
+                insetPadding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 24,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(28),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Selecione a data',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: selectMonth,
+                              icon: const Icon(Icons.calendar_view_month),
+                              label: Text(
+                                _capitalize(
+                                  DateFormat.MMMM(
+                                    'pt_BR',
+                                  ).format(displayedMonth),
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 14,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: selectYear,
+                              icon: const Icon(Icons.event),
+                              label: Text('${displayedMonth.year}'),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 14,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      CalendarDatePicker(
+                        key: ValueKey(
+                          '${displayedMonth.year}-${displayedMonth.month}',
+                        ),
+                        initialDate: tempSelectedDate,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                        currentDate: DateTime.now(),
+                        onDateChanged: (date) {
+                          setDialogState(() {
+                            tempSelectedDate = date;
+                            displayedMonth = DateTime(date.year, date.month);
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('Cancelar'),
+                          ),
+                          const SizedBox(width: 8),
+                          FilledButton(
+                            onPressed: () =>
+                                Navigator.of(context).pop(tempSelectedDate),
+                            child: const Text('Confirmar'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() => _selectedDate = picked);
+    }
   }
 
   Future<void> _save() async {
@@ -92,23 +379,24 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
     if (isEditing) {
       final existing = widget.transaction!;
-      await TransactionService.update(TransactionModel(
-        id: existing.id,
-        name: name,
-        quantity: value,
-        description: _descController.text,
-        categoryId: categoryId,
-        date: baseDate,
-        type: _type,
-        isInstallment: _isInstallment,
-        installmentNumber: existing.installmentNumber,
-        totalInstallments: existing.totalInstallments,
-        installmentGroupId: existing.installmentGroupId,
-      ));
+      await TransactionService.update(
+        TransactionModel(
+          id: existing.id,
+          name: name,
+          quantity: value,
+          description: _descController.text,
+          categoryId: categoryId,
+          date: baseDate,
+          type: _type,
+          isInstallment: _isInstallment,
+          installmentNumber: existing.installmentNumber,
+          totalInstallments: existing.totalInstallments,
+          installmentGroupId: existing.installmentGroupId,
+        ),
+      );
     } else {
       final now = DateTime.now();
-      DateTime firstDate =
-          DateTime(baseDate.year, baseDate.month, _startDay);
+      DateTime firstDate = DateTime(baseDate.year, baseDate.month, _startDay);
       if (firstDate.isBefore(now)) {
         firstDate = addMonths(firstDate, 1);
       }
@@ -119,11 +407,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
         if (_type == TransactionType.expense) {
           final baseValue = value / _installments;
-          installmentValue =
-              double.parse(baseValue.toStringAsFixed(2));
+          installmentValue = double.parse(baseValue.toStringAsFixed(2));
           lastInstallmentValue = double.parse(
-            (value - installmentValue * (_installments - 1))
-                .toStringAsFixed(2),
+            (value - installmentValue * (_installments - 1)).toStringAsFixed(2),
           );
         }
 
@@ -133,33 +419,35 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         for (var i = 1; i <= _installments; i++) {
           final installmentDate = addMonths(firstDate, i - 1);
           final amount = _type == TransactionType.expense
-              ? (i == _installments
-                  ? lastInstallmentValue!
-                  : installmentValue!)
+              ? (i == _installments ? lastInstallmentValue! : installmentValue!)
               : value;
 
-          await TransactionService.insert(TransactionModel(
-            name: name,
-            quantity: amount,
-            description: _descController.text,
-            categoryId: categoryId,
-            date: installmentDate,
-            type: _type,
-            isInstallment: true,
-            installmentNumber: i,
-            totalInstallments: _installments,
-            installmentGroupId: groupId,
-          ));
+          await TransactionService.insert(
+            TransactionModel(
+              name: name,
+              quantity: amount,
+              description: _descController.text,
+              categoryId: categoryId,
+              date: installmentDate,
+              type: _type,
+              isInstallment: true,
+              installmentNumber: i,
+              totalInstallments: _installments,
+              installmentGroupId: groupId,
+            ),
+          );
         }
       } else {
-        await TransactionService.insert(TransactionModel(
-          name: name,
-          quantity: value,
-          description: _descController.text,
-          categoryId: categoryId,
-          date: baseDate,
-          type: _type,
-        ));
+        await TransactionService.insert(
+          TransactionModel(
+            name: name,
+            quantity: value,
+            description: _descController.text,
+            categoryId: categoryId,
+            date: baseDate,
+            type: _type,
+          ),
+        );
       }
     }
 
@@ -172,7 +460,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom),
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: Container(
         padding: const EdgeInsets.all(20),
         child: SingleChildScrollView(
@@ -183,7 +472,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
               Text(
                 isEditing ? 'Editar Transação' : 'Nova Transação',
                 style: const TextStyle(
-                    fontSize: 20, fontWeight: FontWeight.bold),
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 20),
 
@@ -193,10 +484,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                   Expanded(
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            _type == TransactionType.expense
-                                ? Colors.red
-                                : Colors.grey.shade300,
+                        backgroundColor: _type == TransactionType.expense
+                            ? Colors.red
+                            : Colors.grey.shade300,
                       ),
                       onPressed: () {
                         setState(() {
@@ -205,18 +495,19 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                         });
                         loadCategories();
                       },
-                      child: const Text('Gasto',
-                          style: TextStyle(color: Colors.black)),
+                      child: const Text(
+                        'Gasto',
+                        style: TextStyle(color: Colors.black),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            _type == TransactionType.income
-                                ? Colors.green
-                                : Colors.grey.shade300,
+                        backgroundColor: _type == TransactionType.income
+                            ? Colors.green
+                            : Colors.grey.shade300,
                       ),
                       onPressed: () {
                         setState(() {
@@ -225,8 +516,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                         });
                         loadCategories();
                       },
-                      child: const Text('Ganho',
-                          style: TextStyle(color: Colors.black)),
+                      child: const Text(
+                        'Ganho',
+                        style: TextStyle(color: Colors.black),
+                      ),
                     ),
                   ),
                 ],
@@ -237,13 +530,13 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
               TextField(
                 controller: _valueController,
                 keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true),
+                  decimal: true,
+                ),
                 inputFormatters: <TextInputFormatter>[
                   FilteringTextInputFormatter.digitsOnly,
-                  CurrencyInputFormatter(),
+                  CurrencyInputFormatter(currencyCode: _currencyCode),
                 ],
-                decoration:
-                    const InputDecoration(labelText: 'Valor'),
+                decoration: const InputDecoration(labelText: 'Valor'),
               ),
 
               const SizedBox(height: 15),
@@ -252,17 +545,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: _selectedDate,
-                          firstDate: DateTime(2000),
-                          lastDate: DateTime(2100),
-                        );
-                        if (picked != null) {
-                          setState(() => _selectedDate = picked);
-                        }
-                      },
+                      onPressed: _pickTransactionDate,
                       child: Text(
                         'Data: ${DateFormat('dd/MM/yyyy').format(_selectedDate)}',
                         style: const TextStyle(fontSize: 14),
@@ -282,22 +565,20 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                       decoration: InputDecoration(
                         labelText: 'Categoria',
                         border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                       items: [
                         ...categories.map((category) {
                           final rawColor = category['color'];
                           final colorValue = rawColor is int
                               ? rawColor
-                              : int.tryParse(
-                                      rawColor?.toString() ?? '') ??
-                                  0xFF2196F3;
+                              : int.tryParse(rawColor?.toString() ?? '') ??
+                                    0xFF2196F3;
                           final rawId = category['id'];
                           final catId = rawId is int
                               ? rawId
-                              : int.tryParse(
-                                      rawId?.toString() ?? '') ??
-                                  0;
+                              : int.tryParse(rawId?.toString() ?? '') ?? 0;
                           return DropdownMenuItem<int>(
                             value: catId,
                             child: Row(
@@ -330,13 +611,13 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                       onChanged: (value) async {
                         if (value == null) return;
                         if (value == -1) {
-                          final newId =
-                              await AddCategorySheet.show(context,
-                                  type: _type.name);
+                          final newId = await AddCategorySheet.show(
+                            context,
+                            type: _type.name,
+                          );
                           if (newId != null) {
                             await loadCategories();
-                            setState(
-                                () => selectedCategoryId = newId);
+                            setState(() => selectedCategoryId = newId);
                           }
                           return;
                         }
@@ -349,38 +630,32 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                       icon: const Icon(Icons.edit),
                       tooltip: 'Editar categoria',
                       onPressed: () async {
-                        final selected = categories.firstWhere(
-                          (c) {
-                            final id = c['id'] is int
-                                ? c['id']
-                                : int.tryParse(
-                                    c['id']?.toString() ?? '');
-                            return id == selectedCategoryId;
-                          },
-                          orElse: () => {},
-                        );
+                        final selected = categories.firstWhere((c) {
+                          final id = c['id'] is int
+                              ? c['id']
+                              : int.tryParse(c['id']?.toString() ?? '');
+                          return id == selectedCategoryId;
+                        }, orElse: () => {});
                         if (selected.isEmpty) return;
 
                         final rawColor = selected['color'];
                         final colorValue = rawColor is int
                             ? rawColor
-                            : int.tryParse(
-                                    rawColor?.toString() ?? '') ??
-                                0xFF2196F3;
-                        final name =
-                            selected['name']?.toString() ?? '';
+                            : int.tryParse(rawColor?.toString() ?? '') ??
+                                  0xFF2196F3;
+                        final name = selected['name']?.toString() ?? '';
 
-                        final updatedId =
-                            await AddCategorySheet.show(context,
-                                initialName: name,
-                                initialColor: colorValue,
-                                categoryId: selectedCategoryId,
-                                type: _type.name);
+                        final updatedId = await AddCategorySheet.show(
+                          context,
+                          initialName: name,
+                          initialColor: colorValue,
+                          categoryId: selectedCategoryId,
+                          type: _type.name,
+                        );
 
                         if (updatedId != null) {
                           await loadCategories();
-                          setState(
-                              () => selectedCategoryId = updatedId);
+                          setState(() => selectedCategoryId = updatedId);
                         }
                       },
                     ),
@@ -391,8 +666,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
               TextField(
                 controller: _descController,
-                decoration:
-                    const InputDecoration(labelText: 'Descrição'),
+                decoration: const InputDecoration(labelText: 'Descrição'),
               ),
 
               const SizedBox(height: 15),
@@ -401,9 +675,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 value: _isInstallment,
                 onChanged: (value) =>
                     setState(() => _isInstallment = value ?? false),
-                title: Text(_type == TransactionType.income
-                    ? 'Recorrente'
-                    : 'Parcelado'),
+                title: Text(
+                  _type == TransactionType.income ? 'Recorrente' : 'Parcelado',
+                ),
                 contentPadding: EdgeInsets.zero,
                 controlAffinity: ListTileControlAffinity.leading,
               ),
@@ -418,8 +692,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                         decoration: InputDecoration(
                           labelText: 'Meses',
                           border: OutlineInputBorder(
-                              borderRadius:
-                                  BorderRadius.circular(12)),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                         onChanged: (value) {
                           final parsed = int.tryParse(value);
@@ -436,14 +710,16 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                         decoration: InputDecoration(
                           labelText: 'Dia de início',
                           border: OutlineInputBorder(
-                              borderRadius:
-                                  BorderRadius.circular(12)),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                         items: List.generate(28, (i) => i + 1)
-                            .map((day) => DropdownMenuItem<int>(
-                                  value: day,
-                                  child: Text(day.toString()),
-                                ))
+                            .map(
+                              (day) => DropdownMenuItem<int>(
+                                value: day,
+                                child: Text(day.toString()),
+                              ),
+                            )
                             .toList(),
                         onChanged: (value) {
                           if (value != null) {
@@ -459,10 +735,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      _type == TransactionType.expense
-                          ? Colors.red
-                          : Colors.green,
+                  backgroundColor: _type == TransactionType.expense
+                      ? Colors.red
+                      : Colors.green,
                   minimumSize: const Size(double.infinity, 50),
                 ),
                 onPressed: _save,
@@ -470,11 +745,12 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                   isEditing
                       ? 'Salvar alterações'
                       : (_type == TransactionType.expense
-                          ? 'Adicionar Gasto'
-                          : 'Adicionar Ganho'),
+                            ? 'Adicionar Gasto'
+                            : 'Adicionar Ganho'),
                   style: const TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.bold),
+                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],

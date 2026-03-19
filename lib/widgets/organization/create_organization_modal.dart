@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../core/project_context.dart';
 import '../../models/organization_model.dart';
 import '../../services/category_service.dart';
 import '../../services/organization_service.dart';
+import '../../services/project_service.dart';
 import '../../utils/formatters.dart';
 import '../color_picker.dart';
 
@@ -66,8 +68,21 @@ class _CreateOrganizationModalState extends State<CreateOrganizationModal> {
   Color _selectedColor = const Color(0xFF3B82F6);
   bool _isInstallment = false;
   int _installments = 2;
+  String _currencyCode = 'BRL';
 
   bool get _isEditing => widget.organization != null;
+
+  Future<void> _loadCurrency() async {
+    final currencyCode = await ProjectService.getActiveCurrencyCode();
+    if (!mounted) return;
+    setState(() {
+      _currencyCode = currencyCode;
+      if (widget.organization != null) {
+        _valueController.text =
+            formatCurrencyForCode(widget.organization!.quantity, _currencyCode);
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -75,13 +90,15 @@ class _CreateOrganizationModalState extends State<CreateOrganizationModal> {
     final initial = widget.organization;
     if (initial != null) {
       _nameController.text = initial.name;
-      _valueController.text = formatCurrency(initial.quantity);
+      _valueController.text = formatCurrencyForCode(initial.quantity, _currencyCode);
       _selectedColor =
           initial.color != null ? Color(initial.color!) : const Color(0xFF3B82F6);
       _isInstallment = (initial.installments ?? 0) > 1;
       _installments = initial.installments ?? 2;
       _installmentsController.text = _installments.toString();
     }
+
+    _loadCurrency();
 
     _hexController = TextEditingController(
       text:
@@ -133,6 +150,7 @@ class _CreateOrganizationModalState extends State<CreateOrganizationModal> {
       completed: widget.organization?.completed ?? false,
       color: _selectedColor.toARGB32(),
       installments: installments,
+      projectId: widget.organization?.projectId ?? ProjectContext.getActiveProjectId(),
     );
 
     if (_isEditing) {
@@ -200,7 +218,7 @@ class _CreateOrganizationModalState extends State<CreateOrganizationModal> {
                   const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [
                 FilteringTextInputFormatter.digitsOnly,
-                CurrencyInputFormatter(),
+                CurrencyInputFormatter(currencyCode: _currencyCode),
               ],
               decoration: const InputDecoration(
                 hintText: '0,00',

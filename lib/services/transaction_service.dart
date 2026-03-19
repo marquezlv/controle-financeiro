@@ -1,12 +1,21 @@
 import '../core/database/database_helper.dart';
+import '../core/project_context.dart';
 import '../models/transaction_model.dart';
 
 class TransactionService {
   static Future<List<TransactionModel>> getAll() =>
-      DatabaseHelper.instance.getAllTransactions();
+      getByProject(ProjectContext.getActiveProjectId());
 
-  static Future<int> insert(TransactionModel transaction) =>
-      DatabaseHelper.instance.insertTransaction(transaction);
+  static Future<List<TransactionModel>> getByProject(int projectId) =>
+      DatabaseHelper.instance.getTransactionsByProject(projectId);
+
+  static Future<int> insert(TransactionModel transaction) {
+    // Automatically assign to active project if not explicitly set
+    if (transaction.projectId == 1) {
+      transaction.projectId = ProjectContext.getActiveProjectId();
+    }
+    return DatabaseHelper.instance.insertTransaction(transaction);
+  }
 
   static Future<int> update(TransactionModel transaction) =>
       DatabaseHelper.instance.updateTransaction(transaction);

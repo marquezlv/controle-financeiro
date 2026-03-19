@@ -7,6 +7,7 @@ class OrganizationModel {
   final bool completed;
   final int? color;
   final int? installments;
+  final int projectId; // Project this organization belongs to
 
   OrganizationModel({
     this.id,
@@ -17,6 +18,7 @@ class OrganizationModel {
     required this.completed,
     this.color,
     this.installments,
+    this.projectId = 1, // Default to project 1 (Meu Orçamento)
   });
 
   Map<String, dynamic> toMap() {
@@ -29,6 +31,7 @@ class OrganizationModel {
       'completed': completed ? 1 : 0,
       'color': color,
       'installments': installments,
+      'projectId': projectId,
     };
   }
 
@@ -42,6 +45,7 @@ class OrganizationModel {
       completed: map['completed'] == 1,
       color: map.containsKey('color') ? map['color'] as int? : null,
       installments: map['installments'] as int?,
+      projectId: map['projectId'] ?? 1,
     );
   }
 }
