@@ -6,7 +6,7 @@
 
 A mobile application built with Flutter for simple personal expense management.
 
-The goal of this application is to allow users to register, visualize, and organize their expenses in a quick and intuitive way.
+The goal of this application is to allow users to register, visualize, and organize their expenses in a quick and intuitive way. 
 
 ---
 
