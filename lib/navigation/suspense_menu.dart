@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
 import '../core/project_context.dart';
 import '../models/project_model.dart';
+import '../screens/list_screen.dart';
 import '../services/project_service.dart';
 import '../widgets/project/create_project_modal.dart';
 
 class SuspenseMenuButton extends StatelessWidget {
   final VoidCallback onPressed;
 
-  const SuspenseMenuButton({
-    super.key,
-    required this.onPressed,
-  });
+  const SuspenseMenuButton({super.key, required this.onPressed});
 
   @override
   Widget build(BuildContext context) {
@@ -49,10 +47,7 @@ class SuspenseMenuButton extends StatelessWidget {
 class SuspenseMenuDrawer extends StatefulWidget {
   final ValueChanged<ProjectModel> onProjectSelected;
 
-  const SuspenseMenuDrawer({
-    super.key,
-    required this.onProjectSelected,
-  });
+  const SuspenseMenuDrawer({super.key, required this.onProjectSelected});
 
   @override
   State<SuspenseMenuDrawer> createState() => _SuspenseMenuDrawerState();
@@ -94,6 +89,13 @@ class _SuspenseMenuDrawerState extends State<SuspenseMenuDrawer> {
         }
       },
     );
+  }
+
+  void _openTemporaryList() {
+    Navigator.of(context).pop();
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const ListScreen()));
   }
 
   @override
@@ -139,94 +141,121 @@ class _SuspenseMenuDrawerState extends State<SuspenseMenuDrawer> {
 
                   if (snapshot.hasError) {
                     return Center(
-                      child: Text('Erro ao carregar planilhas: ${snapshot.error}'),
+                      child: Text(
+                        'Erro ao carregar planilhas: ${snapshot.error}',
+                      ),
                     );
                   }
 
                   final projects = snapshot.data ?? [];
                   final activeProjectId = ProjectContext.getActiveProjectId();
 
-                  return ListView.separated(
+                  return ListView(
                     padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: projects.length,
-                    separatorBuilder: (_, _) => const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final project = projects[index];
-                      final isSelected = project.id == activeProjectId;
+                    children: [
+                      for (var index = 0; index < projects.length; index++) ...[
+                        Builder(
+                          builder: (context) {
+                            final project = projects[index];
+                            final isSelected = project.id == activeProjectId;
 
-                      return ListTile(
-                        leading: Icon(
-                          Icons.folder_rounded,
-                          color: isSelected ? const Color(0xFF2F6BFF) : null,
-                        ),
-                        title: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                            return ListTile(
+                              leading: Icon(
+                                Icons.folder_rounded,
+                                color: isSelected
+                                    ? const Color(0xFF2F6BFF)
+                                    : null,
+                              ),
+                              title: Row(
                                 children: [
-                                  Text(
-                                    project.name,
-                                    style: TextStyle(
-                                      fontWeight: isSelected
-                                          ? FontWeight.bold
-                                          : FontWeight.w500,
-                                      color: isSelected
-                                          ? const Color(0xFF2F6BFF)
-                                          : null,
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          project.name,
+                                          style: TextStyle(
+                                            fontWeight: isSelected
+                                                ? FontWeight.bold
+                                                : FontWeight.w500,
+                                            color: isSelected
+                                                ? const Color(0xFF2F6BFF)
+                                                : null,
+                                          ),
+                                        ),
+                                        Text(
+                                          project.currencyCode,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey[600],
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  Text(
-                                    project.currencyCode,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey[600],
-                                    ),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.edit_rounded,
+                                          size: 18,
+                                        ),
+                                        onPressed: () =>
+                                            _showEditProjectModal(project),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.delete_rounded,
+                                          size: 18,
+                                        ),
+                                        onPressed: () =>
+                                            _showEditProjectModal(project),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
-                            ),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.edit_rounded, size: 18),
-                                  onPressed: () => _showEditProjectModal(project),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_rounded, size: 18),
-                                  onPressed: () => _showEditProjectModal(project),
-                                ),
-                              ],
-                            ),
-                          ],
+                              selected: isSelected,
+                              onTap: () {
+                                ProjectContext.setActiveProject(project.id!);
+                                widget.onProjectSelected(project);
+                                Navigator.of(context).pop();
+                              },
+                            );
+                          },
                         ),
-                        selected: isSelected,
-                        onTap: () {
-                          ProjectContext.setActiveProject(project.id!);
-                          widget.onProjectSelected(project);
-                          Navigator.of(context).pop();
-                        },
-                      );
-                    },
+                        if (index < projects.length - 1)
+                          const Divider(height: 1),
+                      ],
+                      const SizedBox(height: 16),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: _showCreateProjectModal,
+                            icon: const Icon(Icons.add_rounded),
+                            label: const Text('Criar nova planilha'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF2F6BFF),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.playlist_add_check_rounded),
+                        title: const Text('Lista Temporaria'),
+                        onTap: _openTemporaryList,
+                      ),
+                    ],
                   );
                 },
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _showCreateProjectModal,
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('Criar Planilha Nova'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2F6BFF),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                ),
               ),
             ),
           ],

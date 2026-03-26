@@ -8,7 +8,8 @@ class TransactionService {
 
   static Future<List<TransactionModel>> getByProject(int projectId) async {
     final db = await DatabaseHelper.instance.database;
-    final result = await db.rawQuery('''
+    final result = await db.rawQuery(
+      '''
   SELECT 
     t.*,
     c.name as categoryName,
@@ -18,7 +19,9 @@ class TransactionService {
   ON c.id = t.categoryId
   WHERE t.projectId = ?
   ORDER BY t.date DESC
-  ''', [projectId]);
+  ''',
+      [projectId],
+    );
     return result.map((e) => TransactionModel.fromMap(e)).toList();
   }
 
@@ -49,8 +52,8 @@ class TransactionService {
     final db = await DatabaseHelper.instance.database;
     return await db.delete(
       'transactions',
-      where: 'installmentGroupId = ?',
-      whereArgs: [groupId],
+      where: 'installmentGroupId = ? OR recurrenceGroupId = ?',
+      whereArgs: [groupId, groupId],
     );
   }
 }

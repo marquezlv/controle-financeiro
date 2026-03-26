@@ -34,13 +34,16 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   final TextEditingController _valueController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _installmentsController = TextEditingController();
+  final TextEditingController _recurrenceController = TextEditingController();
   int? selectedCategoryId;
   DateTime _selectedDate = DateTime.now();
 
   bool get isEditing => widget.transaction != null;
 
   bool _isInstallment = false;
+  bool _isRecurring = false;
   int _installments = 2;
+  int _recurrenceMonths = 2;
   int _startDay = min(DateTime.now().day, 28);
   String _currencyCode = 'BRL';
 
@@ -73,6 +76,11 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     super.initState();
     final initial = widget.transaction;
     if (initial != null) {
+      final isRecurringEntry = initial.isRecurringEntry;
+      final startDate = initial.sequenceGroupId != null
+          ? _resolveSequenceStartDate(initial)
+          : initial.date;
+
       _type = initial.type;
       _valueController.text = formatCurrencyForCode(
         initial.quantity,
@@ -80,12 +88,16 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       );
       _descController.text = initial.description;
       selectedCategoryId = initial.categoryId;
-      _selectedDate = initial.date;
-      _isInstallment = initial.isInstallment;
+      _selectedDate = startDate;
+      _isRecurring = isRecurringEntry;
+      _isInstallment = initial.isInstallment && !isRecurringEntry;
       _installments = initial.totalInstallments ?? 1;
-      _startDay = min(initial.date.day, 28);
+      _recurrenceMonths =
+          initial.totalRecurrences ?? initial.totalInstallments ?? 1;
+      _startDay = min(startDate.day, 28);
     }
     _installmentsController.text = _installments.toString();
+    _recurrenceController.text = _recurrenceMonths.toString();
     _loadCurrency();
     loadCategories();
   }
@@ -95,6 +107,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     _valueController.dispose();
     _descController.dispose();
     _installmentsController.dispose();
+    _recurrenceController.dispose();
     super.dispose();
   }
 
@@ -110,6 +123,140 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   }) {
     final lastDayOfMonth = DateUtils.getDaysInMonth(year, month);
     return DateTime(year, month, min(day, lastDayOfMonth));
+  }
+
+  DateTime _resolveSequenceStartDate(TransactionModel transaction) {
+    final sequenceNumber = transaction.sequenceNumber ?? 1;
+
+    if (sequenceNumber <= 1) {
+      return transaction.date;
+    }
+
+    return addMonths(transaction.date, -(sequenceNumber - 1));
+  }
+
+  DateTime _resolveFirstScheduledDate(DateTime date, {int? day}) {
+    final today = DateUtils.dateOnly(DateTime.now());
+    var scheduledDate = day == null
+        ? DateUtils.dateOnly(date)
+        : DateTime(date.year, date.month, day);
+
+    while (DateUtils.dateOnly(scheduledDate).isBefore(today)) {
+      scheduledDate = addMonths(scheduledDate, 1);
+    }
+
+    return scheduledDate;
+  }
+
+  String _buildGroupId() {
+    return '${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(9999)}';
+  }
+
+  Future<void> _insertInstallmentTransactions({
+    required String name,
+    required double value,
+    required String description,
+    required int categoryId,
+    required DateTime firstDate,
+    required String groupId,
+  }) async {
+    double? installmentValue;
+    double? lastInstallmentValue;
+
+    if (_type == TransactionType.expense) {
+      final baseValue = value / _installments;
+      installmentValue = double.parse(baseValue.toStringAsFixed(2));
+      lastInstallmentValue = double.parse(
+        (value - installmentValue * (_installments - 1)).toStringAsFixed(2),
+      );
+    }
+
+    for (var i = 1; i <= _installments; i++) {
+      final installmentDate = addMonths(firstDate, i - 1);
+      final amount = _type == TransactionType.expense
+          ? (i == _installments ? lastInstallmentValue! : installmentValue!)
+          : value;
+
+      await TransactionService.insert(
+        TransactionModel(
+          name: name,
+          quantity: amount,
+          description: description,
+          categoryId: categoryId,
+          date: installmentDate,
+          type: _type,
+          isInstallment: true,
+          installmentNumber: i,
+          totalInstallments: _installments,
+          installmentGroupId: groupId,
+        ),
+      );
+    }
+  }
+
+  Future<void> _insertRecurringTransactions({
+    required String name,
+    required double value,
+    required String description,
+    required int categoryId,
+    required DateTime firstDate,
+    required String groupId,
+  }) async {
+    for (var i = 1; i <= _recurrenceMonths; i++) {
+      final recurrenceDate = addMonths(firstDate, i - 1);
+
+      await TransactionService.insert(
+        TransactionModel(
+          name: name,
+          quantity: value,
+          description: description,
+          categoryId: categoryId,
+          date: recurrenceDate,
+          type: _type,
+          isRecurring: true,
+          recurrenceNumber: i,
+          totalRecurrences: _recurrenceMonths,
+          recurrenceGroupId: groupId,
+        ),
+      );
+    }
+  }
+
+  Future<void> _replaceSequence({
+    required TransactionModel existing,
+    required String name,
+    required double value,
+    required String description,
+    required int categoryId,
+  }) async {
+    final groupId = existing.sequenceGroupId ?? _buildGroupId();
+
+    if (existing.sequenceGroupId != null) {
+      await TransactionService.deleteGroup(existing.sequenceGroupId!);
+    } else if (existing.id != null) {
+      await TransactionService.delete(existing.id!);
+    }
+
+    if (_isRecurring) {
+      await _insertRecurringTransactions(
+        name: name,
+        value: value,
+        description: description,
+        categoryId: categoryId,
+        firstDate: _selectedDate,
+        groupId: groupId,
+      );
+      return;
+    }
+
+    await _insertInstallmentTransactions(
+      name: name,
+      value: value,
+      description: description,
+      categoryId: categoryId,
+      firstDate: DateTime(_selectedDate.year, _selectedDate.month, _startDay),
+      groupId: groupId,
+    );
   }
 
   Future<int?> _showMonthPickerDialog({
@@ -362,7 +509,12 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     );
 
     if (picked != null) {
-      setState(() => _selectedDate = picked);
+      setState(() {
+        _selectedDate = picked;
+        if (_isInstallment) {
+          _startDay = min(picked.day, 28);
+        }
+      });
     }
   }
 
@@ -379,64 +531,62 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
     if (isEditing) {
       final existing = widget.transaction!;
-      await TransactionService.update(
-        TransactionModel(
-          id: existing.id,
+
+      if (_isRecurring ||
+          (_isInstallment && existing.sequenceGroupId != null)) {
+        await _replaceSequence(
+          existing: existing,
           name: name,
-          quantity: value,
+          value: value,
           description: _descController.text,
           categoryId: categoryId,
-          date: baseDate,
-          type: _type,
-          isInstallment: _isInstallment,
-          installmentNumber: existing.installmentNumber,
-          totalInstallments: existing.totalInstallments,
-          installmentGroupId: existing.installmentGroupId,
-        ),
-      );
-    } else {
-      final now = DateTime.now();
-      DateTime firstDate = DateTime(baseDate.year, baseDate.month, _startDay);
-      if (firstDate.isBefore(now)) {
-        firstDate = addMonths(firstDate, 1);
+        );
+      } else {
+        await TransactionService.update(
+          TransactionModel(
+            id: existing.id,
+            name: name,
+            quantity: value,
+            description: _descController.text,
+            categoryId: categoryId,
+            date: baseDate,
+            type: _type,
+            isInstallment: _isInstallment,
+            installmentNumber: _isInstallment
+                ? existing.installmentNumber
+                : null,
+            totalInstallments: _isInstallment
+                ? existing.totalInstallments
+                : null,
+            installmentGroupId: _isInstallment
+                ? existing.installmentGroupId
+                : null,
+            isRecurring: false,
+            recurrenceNumber: null,
+            totalRecurrences: null,
+            recurrenceGroupId: null,
+          ),
+        );
       }
-
+    } else {
       if (_isInstallment && _installments > 1) {
-        double? installmentValue;
-        double? lastInstallmentValue;
-
-        if (_type == TransactionType.expense) {
-          final baseValue = value / _installments;
-          installmentValue = double.parse(baseValue.toStringAsFixed(2));
-          lastInstallmentValue = double.parse(
-            (value - installmentValue * (_installments - 1)).toStringAsFixed(2),
-          );
-        }
-
-        final groupId =
-            '${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(9999)}';
-
-        for (var i = 1; i <= _installments; i++) {
-          final installmentDate = addMonths(firstDate, i - 1);
-          final amount = _type == TransactionType.expense
-              ? (i == _installments ? lastInstallmentValue! : installmentValue!)
-              : value;
-
-          await TransactionService.insert(
-            TransactionModel(
-              name: name,
-              quantity: amount,
-              description: _descController.text,
-              categoryId: categoryId,
-              date: installmentDate,
-              type: _type,
-              isInstallment: true,
-              installmentNumber: i,
-              totalInstallments: _installments,
-              installmentGroupId: groupId,
-            ),
-          );
-        }
+        await _insertInstallmentTransactions(
+          name: name,
+          value: value,
+          description: _descController.text,
+          categoryId: categoryId,
+          firstDate: _resolveFirstScheduledDate(baseDate, day: _startDay),
+          groupId: _buildGroupId(),
+        );
+      } else if (_isRecurring) {
+        await _insertRecurringTransactions(
+          name: name,
+          value: value,
+          description: _descController.text,
+          categoryId: categoryId,
+          firstDate: _resolveFirstScheduledDate(baseDate),
+          groupId: _buildGroupId(),
+        );
       } else {
         await TransactionService.insert(
           TransactionModel(
@@ -512,6 +662,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                       onPressed: () {
                         setState(() {
                           _type = TransactionType.income;
+                          _isInstallment = false;
                           selectedCategoryId = null;
                         });
                         loadCategories();
@@ -671,16 +822,45 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
               const SizedBox(height: 15),
 
-              CheckboxListTile(
-                value: _isInstallment,
-                onChanged: (value) =>
-                    setState(() => _isInstallment = value ?? false),
-                title: Text(
-                  _type == TransactionType.income ? 'Recorrente' : 'Parcelado',
+              if (_type == TransactionType.expense) ...[
+                CheckboxListTile(
+                  value: _isInstallment,
+                  onChanged: (value) {
+                    setState(() {
+                      _isInstallment = value ?? false;
+                      if (_isInstallment) {
+                        _isRecurring = false;
+                      }
+                    });
+                  },
+                  title: const Text('Parcelado'),
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
                 ),
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-              ),
+                CheckboxListTile(
+                  value: _isRecurring,
+                  onChanged: (value) {
+                    setState(() {
+                      _isRecurring = value ?? false;
+                      if (_isRecurring) {
+                        _isInstallment = false;
+                      }
+                    });
+                  },
+                  title: const Text('Recorrente'),
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+              ] else ...[
+                CheckboxListTile(
+                  value: _isRecurring,
+                  onChanged: (value) =>
+                      setState(() => _isRecurring = value ?? false),
+                  title: const Text('Recorrente'),
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+              ],
 
               if (_isInstallment) ...[
                 Row(
@@ -729,6 +909,26 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 25),
+              ],
+
+              if (_isRecurring) ...[
+                TextField(
+                  controller: _recurrenceController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Meses ativos',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onChanged: (value) {
+                    final parsed = int.tryParse(value);
+                    if (parsed != null && parsed > 0) {
+                      setState(() => _recurrenceMonths = parsed);
+                    }
+                  },
                 ),
                 const SizedBox(height: 25),
               ],

@@ -53,8 +53,10 @@ class HomeScreenState extends State<HomeScreen> {
 
   int get _maxYear {
     final currentYear = DateTime.now().year;
-    final maxFromTransactions =
-        _transactions.fold<int>(currentYear, (prev, t) => max(prev, t.date.year));
+    final maxFromTransactions = _transactions.fold<int>(
+      currentYear,
+      (prev, t) => max(prev, t.date.year),
+    );
     return max(currentYear, maxFromTransactions);
   }
 
@@ -112,7 +114,9 @@ class HomeScreenState extends State<HomeScreen> {
         }
       }
 
-      if (!_showYearView && isSameYear && transaction.date.month == _selectedMonth) {
+      if (!_showYearView &&
+          isSameYear &&
+          transaction.date.month == _selectedMonth) {
         if (transaction.type == TransactionType.income) {
           incomeMonth += transaction.quantity;
         } else {
@@ -163,8 +167,8 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _deleteTransaction(TransactionModel transaction) async {
-    if (transaction.installmentGroupId != null) {
-      await TransactionService.deleteGroup(transaction.installmentGroupId!);
+    if (transaction.sequenceGroupId != null) {
+      await TransactionService.deleteGroup(transaction.sequenceGroupId!);
     } else if (transaction.id != null) {
       await TransactionService.delete(transaction.id!);
     }

@@ -64,8 +64,8 @@ class ExpenseScreenState extends State<ExpenseScreen> {
   }
 
   Future<void> _deleteTransaction(TransactionModel transaction) async {
-    if (transaction.installmentGroupId != null) {
-      await TransactionService.deleteGroup(transaction.installmentGroupId!);
+    if (transaction.sequenceGroupId != null) {
+      await TransactionService.deleteGroup(transaction.sequenceGroupId!);
     } else if (transaction.id != null) {
       await TransactionService.delete(transaction.id!);
     }
@@ -90,7 +90,8 @@ class ExpenseScreenState extends State<ExpenseScreen> {
       final category = transaction.categoryName ?? 'Outros';
       final colorValue = transaction.categoryColor ?? 0xFF2196F3;
 
-      categoryMap[category] = (categoryMap[category] ?? 0) + transaction.quantity;
+      categoryMap[category] =
+          (categoryMap[category] ?? 0) + transaction.quantity;
       _categoryColors.putIfAbsent(category, () => colorValue);
     }
 

@@ -16,6 +16,11 @@ class TransactionModel {
   int? totalInstallments;
   String? installmentGroupId;
 
+  bool isRecurring;
+  int? recurrenceNumber;
+  int? totalRecurrences;
+  String? recurrenceGroupId;
+
   String? categoryName;
   int? categoryColor;
 
@@ -32,9 +37,22 @@ class TransactionModel {
     this.installmentNumber,
     this.totalInstallments,
     this.installmentGroupId,
+    this.isRecurring = false,
+    this.recurrenceNumber,
+    this.totalRecurrences,
+    this.recurrenceGroupId,
     this.categoryName,
     this.categoryColor,
   });
+
+  bool get isRecurringEntry =>
+      isRecurring || (type == TransactionType.income && isInstallment);
+
+  String? get sequenceGroupId => recurrenceGroupId ?? installmentGroupId;
+
+  int? get sequenceNumber => recurrenceNumber ?? installmentNumber;
+
+  int? get sequenceTotal => totalRecurrences ?? totalInstallments;
 
   Map<String, dynamic> toMap() {
     return {
@@ -50,6 +68,10 @@ class TransactionModel {
       'installmentNumber': installmentNumber,
       'totalInstallments': totalInstallments,
       'installmentGroupId': installmentGroupId,
+      'isRecurring': isRecurring ? 1 : 0,
+      'recurrenceNumber': recurrenceNumber,
+      'totalRecurrences': totalRecurrences,
+      'recurrenceGroupId': recurrenceGroupId,
     };
   }
 
@@ -69,6 +91,10 @@ class TransactionModel {
       installmentNumber: map['installmentNumber'] as int?,
       totalInstallments: map['totalInstallments'] as int?,
       installmentGroupId: map['installmentGroupId'] as String?,
+      isRecurring: (map['isRecurring'] ?? 0) == 1,
+      recurrenceNumber: map['recurrenceNumber'] as int?,
+      totalRecurrences: map['totalRecurrences'] as int?,
+      recurrenceGroupId: map['recurrenceGroupId'] as String?,
       categoryName: map['categoryName'], // 👈 MUITO IMPORTANTE
       categoryColor: map['categoryColor'] as int?,
     );

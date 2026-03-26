@@ -8,6 +8,8 @@ import 'migrations/migration_v7.dart';
 import 'migrations/migration_v8.dart';
 import 'migrations/migration_v9.dart';
 import 'migrations/migration_v10.dart';
+import 'migrations/migration_v11.dart';
+import 'migrations/migration_v12.dart';
 
 class DatabaseMigrations {
   static Future<void> ensureRequiredColumns(Database db) async {
@@ -32,6 +34,26 @@ class DatabaseMigrations {
     if (!txCols.contains('installmentGroupId')) {
       await db.execute(
         'ALTER TABLE transactions ADD COLUMN installmentGroupId TEXT',
+      );
+    }
+    if (!txCols.contains('isRecurring')) {
+      await db.execute(
+        'ALTER TABLE transactions ADD COLUMN isRecurring INTEGER NOT NULL DEFAULT 0',
+      );
+    }
+    if (!txCols.contains('recurrenceNumber')) {
+      await db.execute(
+        'ALTER TABLE transactions ADD COLUMN recurrenceNumber INTEGER',
+      );
+    }
+    if (!txCols.contains('totalRecurrences')) {
+      await db.execute(
+        'ALTER TABLE transactions ADD COLUMN totalRecurrences INTEGER',
+      );
+    }
+    if (!txCols.contains('recurrenceGroupId')) {
+      await db.execute(
+        'ALTER TABLE transactions ADD COLUMN recurrenceGroupId TEXT',
       );
     }
 
@@ -75,13 +97,40 @@ class DatabaseMigrations {
           createdAt TEXT NOT NULL,
           "order" INTEGER NOT NULL DEFAULT 0
         )''');
-        await db.execute('''INSERT INTO projects (name, currencyCode, createdAt, "order")
-          VALUES ('Meu Orçamento', 'BRL', datetime('now'), 0)''');
+        await db.execute(
+          '''INSERT INTO projects (name, currencyCode, createdAt, "order")
+          VALUES ('Meu Orçamento', 'BRL', datetime('now'), 0)''',
+        );
       }
     }
+
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS lists (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  projectId INTEGER NOT NULL DEFAULT 1,
+  createdAt TEXT NOT NULL,
+  FOREIGN KEY (projectId) REFERENCES projects (id)
+)
+''');
+
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS list_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  listId INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  completed INTEGER NOT NULL DEFAULT 0,
+  createdAt TEXT NOT NULL,
+  FOREIGN KEY (listId) REFERENCES lists (id) ON DELETE CASCADE
+)
+''');
   }
 
-  static Future<void> upgradeDB(Database db, int oldVersion, int newVersion) async {
+  static Future<void> upgradeDB(
+    Database db,
+    int oldVersion,
+    int newVersion,
+  ) async {
     if (oldVersion < 3) {
       await MigrationV3.run(db);
     }
@@ -112,6 +161,14 @@ class DatabaseMigrations {
 
     if (oldVersion < 10) {
       await MigrationV10.run(db);
+    }
+
+    if (oldVersion < 11) {
+      await MigrationV11.run(db);
+    }
+
+    if (oldVersion < 12) {
+      await MigrationV12.run(db);
     }
   }
 }

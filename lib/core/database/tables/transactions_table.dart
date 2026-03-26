@@ -18,6 +18,10 @@ CREATE TABLE $table (
   installmentNumber INTEGER,
   totalInstallments INTEGER,
   installmentGroupId TEXT,
+  isRecurring INTEGER NOT NULL DEFAULT 0,
+  recurrenceNumber INTEGER,
+  totalRecurrences INTEGER,
+  recurrenceGroupId TEXT,
   FOREIGN KEY (categoryId) REFERENCES categories (id),
   FOREIGN KEY (projectId) REFERENCES projects (id)
 )

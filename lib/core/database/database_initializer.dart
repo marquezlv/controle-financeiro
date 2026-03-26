@@ -7,9 +7,10 @@ import 'tables/categories_table.dart';
 import 'tables/organization_table.dart';
 import 'tables/projects_table.dart';
 import 'tables/transactions_table.dart';
+import 'tables/list_table.dart';
 
 class DatabaseInitializer {
-  static const int version = 10;
+  static const int version = 12;
 
   static Future<Database> initialize(String filePath) async {
     final dbPath = await getDatabasesPath();
@@ -32,6 +33,7 @@ class DatabaseInitializer {
     await CategoriesTable.create(db);
     await TransactionsTable.create(db);
     await OrganizationsTable.create(db);
+    await ListTable.create(db);
     await DatabaseSeed.ensureDefaultCategories(db);
     // Insert default project for new installations
     await db.execute('''

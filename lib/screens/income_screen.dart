@@ -21,7 +21,8 @@ class IncomeScreenState extends State<IncomeScreen> {
   String _currencyCode = 'BRL';
 
   Map<String, double> _categoryTotals = {};
-  final Map<String, int> _categoryColors = {}; // store the color for each category name
+  final Map<String, int> _categoryColors =
+      {}; // store the color for each category name
 
   int _selectedMonth = DateTime.now().month;
   int _selectedYear = DateTime.now().year;
@@ -43,8 +44,8 @@ class IncomeScreenState extends State<IncomeScreen> {
   }
 
   Future<void> _deleteTransaction(TransactionModel transaction) async {
-    if (transaction.installmentGroupId != null) {
-      await TransactionService.deleteGroup(transaction.installmentGroupId!);
+    if (transaction.sequenceGroupId != null) {
+      await TransactionService.deleteGroup(transaction.sequenceGroupId!);
     } else if (transaction.id != null) {
       await TransactionService.delete(transaction.id!);
     }
@@ -237,9 +238,7 @@ class IncomeScreenState extends State<IncomeScreen> {
     return AmountCard(
       title: 'Ganhos Totais',
       amount: formatCurrencyForCode(_totalIncome, _currencyCode),
-      gradient: LinearGradient(
-        colors: [Color(0xFF00C853), Color(0xFF00E676)],
-      ),
+      gradient: LinearGradient(colors: [Color(0xFF00C853), Color(0xFF00E676)]),
     );
   }
 
@@ -285,4 +284,3 @@ class IncomeScreenState extends State<IncomeScreen> {
     );
   }
 }
-
