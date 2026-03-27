@@ -16,7 +16,8 @@ The goal of this application is to allow users to register, visualize, and organ
 - Categorize expenses
 - Add and manage projections
 - Organized charts and graphs
-- Multiple spreadsheets 
+- Multiple spreadsheets
+- Temporary list for shopping
 - Custom color selection
 - Local data storage
 - Simple and intuitive interface
