@@ -37,35 +37,38 @@ class TransactionTile extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Row(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: categoryColor,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            transaction.categoryName ?? 'Categoria',
-                            style: TextStyle(
-                              color: categoryTextColor,
-                              fontWeight: FontWeight.w700,
+                        Flexible(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: categoryColor,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              transaction.categoryName ?? 'Categoria',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: categoryTextColor,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
                         ),
-                        if (sequenceLabel != null)
+                        if (sequenceLabel != null) ...[
+                          const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 10,
@@ -83,50 +86,57 @@ class TransactionTile extends StatelessWidget {
                               ),
                             ),
                           ),
+                        ],
                       ],
                     ),
-                    if (detailText.isNotEmpty) ...[
-                      const SizedBox(height: 8),
+                  ),
+                  const SizedBox(width: 12),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
                       Text(
-                        detailText,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w400,
-                          color: Color(0xFF6B7280),
+                        formatCurrencyForCode(
+                          transaction.quantity,
+                          currencyCode,
+                        ),
+                        style: TextStyle(
+                          height: 1.2,
+                          color: amountColor,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
+                      if (onDelete != null) ...[
+                        const SizedBox(width: 4),
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints.tightFor(
+                            width: 28,
+                            height: 28,
+                          ),
+                          icon: Icon(
+                            Icons.delete_outline,
+                            color: Colors.grey[700],
+                          ),
+                          onPressed: onDelete,
+                        ),
+                      ],
                     ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(
-                    formatCurrencyForCode(transaction.quantity, currencyCode),
-                    style: TextStyle(
-                      height: 1.2,
-                      color: amountColor,
-                      fontWeight: FontWeight.bold,
-                    ),
                   ),
-                  if (onDelete != null) ...[
-                    const SizedBox(width: 4),
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints.tightFor(
-                        width: 28,
-                        height: 28,
-                      ),
-                      icon: Icon(Icons.delete_outline, color: Colors.grey[700]),
-                      onPressed: onDelete,
-                    ),
-                  ],
                 ],
               ),
+              if (detailText.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  detailText,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -160,7 +170,6 @@ class TransactionTile extends StatelessWidget {
       return null;
     }
 
-    final prefix = transaction.isRecurringEntry ? 'Rec.' : 'Parc.';
-    return '$prefix $sequenceNumber/$sequenceTotal';
+    return '[$sequenceNumber/$sequenceTotal]';
   }
 }

@@ -34,6 +34,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   final TextEditingController _valueController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _installmentsController = TextEditingController();
+  final TextEditingController _recurrenceController = TextEditingController();
   int? selectedCategoryId;
   DateTime _selectedDate = DateTime.now();
 
@@ -42,7 +43,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   bool _isInstallment = false;
   bool _isRecurring = false;
   int _installments = 2;
-  int _startDay = min(DateTime.now().day, 28);
+  int _recurrenceMonths = 12;
   String _currencyCode = 'BRL';
 
   static const int _fixedRecurrenceMonths = 12;
@@ -63,10 +64,18 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
   Future<void> loadCategories() async {
     final data = await CategoryService.getByType(_type.name);
+    final categoryIds = data
+        .map((c) {
+          final rawId = c['id'];
+          return rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
+        })
+        .whereType<int>()
+        .toSet();
+
     setState(() {
       categories = data;
-      if (categories.isNotEmpty && selectedCategoryId == null) {
-        selectedCategoryId = categories.first['id'] as int?;
+      if (!categoryIds.contains(selectedCategoryId)) {
+        selectedCategoryId = categoryIds.isNotEmpty ? categoryIds.first : null;
       }
     });
   }
@@ -92,9 +101,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       _isRecurring = isRecurringEntry;
       _isInstallment = initial.isInstallment && !isRecurringEntry;
       _installments = initial.totalInstallments ?? 1;
-      _startDay = min(startDate.day, 28);
+      _recurrenceMonths = initial.totalRecurrences ?? _fixedRecurrenceMonths;
     }
     _installmentsController.text = _installments.toString();
+    _recurrenceController.text = _recurrenceMonths.toString();
     _loadCurrency();
     loadCategories();
   }
@@ -104,6 +114,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     _valueController.dispose();
     _descController.dispose();
     _installmentsController.dispose();
+    _recurrenceController.dispose();
     super.dispose();
   }
 
@@ -196,9 +207,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     required String description,
     required int categoryId,
     required DateTime firstDate,
+    required int months,
   }) async {
     final groupId = _buildGroupId();
-    for (var i = 1; i <= _fixedRecurrenceMonths; i++) {
+    for (var i = 1; i <= months; i++) {
       final recurrenceDate = addMonths(firstDate, i - 1);
 
       await TransactionService.insert(
@@ -211,7 +223,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           type: _type,
           isRecurring: true,
           recurrenceNumber: i,
-          totalRecurrences: _fixedRecurrenceMonths,
+          totalRecurrences: months,
           recurrenceGroupId: groupId,
         ),
       );
@@ -238,7 +250,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       value: value,
       description: description,
       categoryId: categoryId,
-      firstDate: DateTime(_selectedDate.year, _selectedDate.month, _startDay),
+      firstDate: _resolveFirstScheduledDate(_selectedDate),
       groupId: groupId,
     );
   }
@@ -495,9 +507,6 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     if (picked != null) {
       setState(() {
         _selectedDate = picked;
-        if (_isInstallment) {
-          _startDay = min(picked.day, 28);
-        }
       });
     }
   }
@@ -512,6 +521,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         : _descController.text;
     final categoryId = selectedCategoryId ?? 1;
     final baseDate = _selectedDate;
+    final recurrenceMonths = _type == TransactionType.income
+        ? _recurrenceMonths
+        : _fixedRecurrenceMonths;
 
     if (isEditing) {
       final existing = widget.transaction!;
@@ -546,10 +558,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 : null,
             isRecurring: _isRecurring,
             recurrenceNumber: _isRecurring ? existing.recurrenceNumber : null,
-            totalRecurrences: _isRecurring
-                ? (existing.totalRecurrences ?? _fixedRecurrenceMonths)
-                : null,
-            recurrenceGroupId: null,
+            totalRecurrences: _isRecurring ? recurrenceMonths : null,
+            recurrenceGroupId: _isRecurring ? existing.recurrenceGroupId : null,
           ),
         );
       }
@@ -560,7 +570,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           value: value,
           description: _descController.text,
           categoryId: categoryId,
-          firstDate: _resolveFirstScheduledDate(baseDate, day: _startDay),
+          firstDate: _resolveFirstScheduledDate(baseDate),
           groupId: _buildGroupId(),
         );
       } else if (_isRecurring) {
@@ -570,6 +580,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           description: _descController.text,
           categoryId: categoryId,
           firstDate: _resolveFirstScheduledDate(baseDate),
+          months: recurrenceMonths,
         );
       } else {
         await TransactionService.insert(
@@ -697,7 +708,16 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<int>(
-                      initialValue: selectedCategoryId,
+                      initialValue:
+                          categories.any((category) {
+                            final rawId = category['id'];
+                            final catId = rawId is int
+                                ? rawId
+                                : int.tryParse(rawId?.toString() ?? '');
+                            return catId == selectedCategoryId;
+                          })
+                          ? selectedCategoryId
+                          : null,
                       decoration: InputDecoration(
                         labelText: 'Categoria',
                         border: OutlineInputBorder(
@@ -848,64 +868,51 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
               ],
 
               if (_isInstallment) ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _installmentsController,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: 'Meses',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        onChanged: (value) {
-                          final parsed = int.tryParse(value);
-                          if (parsed != null && parsed > 0) {
-                            setState(() => _installments = parsed);
-                          }
-                        },
-                      ),
+                TextField(
+                  controller: _installmentsController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Meses',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: DropdownButtonFormField<int>(
-                        initialValue: _startDay,
-                        decoration: InputDecoration(
-                          labelText: 'Dia de início',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        items: List.generate(28, (i) => i + 1)
-                            .map(
-                              (day) => DropdownMenuItem<int>(
-                                value: day,
-                                child: Text(day.toString()),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() => _startDay = value);
-                          }
-                        },
-                      ),
-                    ),
-                  ],
+                  ),
+                  onChanged: (value) {
+                    final parsed = int.tryParse(value);
+                    if (parsed != null && parsed > 0) {
+                      setState(() => _installments = parsed);
+                    }
+                  },
                 ),
                 const SizedBox(height: 25),
               ],
 
               if (_isRecurring) ...[
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Serão criadas 12 transações mensais individuais.',
-                    style: TextStyle(fontSize: 12, color: Colors.black54),
+                if (_type == TransactionType.income)
+                  TextField(
+                    controller: _recurrenceController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Meses',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onChanged: (value) {
+                      final parsed = int.tryParse(value);
+                      if (parsed != null && parsed > 0) {
+                        setState(() => _recurrenceMonths = parsed);
+                      }
+                    },
+                  )
+                else
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Serão criadas 12 transações mensais individuais.',
+                      style: TextStyle(fontSize: 12, color: Colors.black54),
+                    ),
                   ),
-                ),
                 const SizedBox(height: 25),
               ],
 
