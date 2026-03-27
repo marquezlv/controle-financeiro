@@ -86,13 +86,13 @@ class TransactionTile extends StatelessWidget {
                       ],
                     ),
                     if (detailText.isNotEmpty) ...[
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                       Text(
                         detailText,
                         style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF111827),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                          color: Color(0xFF6B7280),
                         ),
                       ),
                     ],
@@ -100,20 +100,27 @@ class TransactionTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Text(
                     formatCurrencyForCode(transaction.quantity, currencyCode),
                     style: TextStyle(
+                      height: 1.2,
                       color: amountColor,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   if (onDelete != null) ...[
-                    const SizedBox(height: 6),
+                    const SizedBox(width: 4),
                     IconButton(
                       visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 28,
+                        height: 28,
+                      ),
                       icon: Icon(Icons.delete_outline, color: Colors.grey[700]),
                       onPressed: onDelete,
                     ),

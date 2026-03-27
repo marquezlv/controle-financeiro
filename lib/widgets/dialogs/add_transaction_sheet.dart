@@ -34,7 +34,6 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   final TextEditingController _valueController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _installmentsController = TextEditingController();
-  final TextEditingController _recurrenceController = TextEditingController();
   int? selectedCategoryId;
   DateTime _selectedDate = DateTime.now();
 
@@ -43,9 +42,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   bool _isInstallment = false;
   bool _isRecurring = false;
   int _installments = 2;
-  int _recurrenceMonths = 2;
   int _startDay = min(DateTime.now().day, 28);
   String _currencyCode = 'BRL';
+
+  static const int _fixedRecurrenceMonths = 12;
 
   Future<void> _loadCurrency() async {
     final currencyCode = await ProjectService.getActiveCurrencyCode();
@@ -77,7 +77,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     final initial = widget.transaction;
     if (initial != null) {
       final isRecurringEntry = initial.isRecurringEntry;
-      final startDate = initial.sequenceGroupId != null
+      final startDate = (!isRecurringEntry && initial.sequenceGroupId != null)
           ? _resolveSequenceStartDate(initial)
           : initial.date;
 
@@ -92,12 +92,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       _isRecurring = isRecurringEntry;
       _isInstallment = initial.isInstallment && !isRecurringEntry;
       _installments = initial.totalInstallments ?? 1;
-      _recurrenceMonths =
-          initial.totalRecurrences ?? initial.totalInstallments ?? 1;
       _startDay = min(startDate.day, 28);
     }
     _installmentsController.text = _installments.toString();
-    _recurrenceController.text = _recurrenceMonths.toString();
     _loadCurrency();
     loadCategories();
   }
@@ -107,7 +104,6 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     _valueController.dispose();
     _descController.dispose();
     _installmentsController.dispose();
-    _recurrenceController.dispose();
     super.dispose();
   }
 
@@ -200,9 +196,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     required String description,
     required int categoryId,
     required DateTime firstDate,
-    required String groupId,
   }) async {
-    for (var i = 1; i <= _recurrenceMonths; i++) {
+    final groupId = _buildGroupId();
+    for (var i = 1; i <= _fixedRecurrenceMonths; i++) {
       final recurrenceDate = addMonths(firstDate, i - 1);
 
       await TransactionService.insert(
@@ -215,7 +211,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           type: _type,
           isRecurring: true,
           recurrenceNumber: i,
-          totalRecurrences: _recurrenceMonths,
+          totalRecurrences: _fixedRecurrenceMonths,
           recurrenceGroupId: groupId,
         ),
       );
@@ -229,25 +225,13 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     required String description,
     required int categoryId,
   }) async {
-    final groupId = existing.sequenceGroupId ?? _buildGroupId();
+    final groupId = existing.sequenceGroupId;
 
-    if (existing.sequenceGroupId != null) {
-      await TransactionService.deleteGroup(existing.sequenceGroupId!);
-    } else if (existing.id != null) {
-      await TransactionService.delete(existing.id!);
-    }
-
-    if (_isRecurring) {
-      await _insertRecurringTransactions(
-        name: name,
-        value: value,
-        description: description,
-        categoryId: categoryId,
-        firstDate: _selectedDate,
-        groupId: groupId,
-      );
+    if (groupId == null) {
       return;
     }
+
+    await TransactionService.deleteGroup(groupId);
 
     await _insertInstallmentTransactions(
       name: name,
@@ -532,8 +516,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     if (isEditing) {
       final existing = widget.transaction!;
 
-      if (_isRecurring ||
-          (_isInstallment && existing.sequenceGroupId != null)) {
+      if (_isInstallment && existing.sequenceGroupId != null) {
         await _replaceSequence(
           existing: existing,
           name: name,
@@ -561,9 +544,11 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             installmentGroupId: _isInstallment
                 ? existing.installmentGroupId
                 : null,
-            isRecurring: false,
-            recurrenceNumber: null,
-            totalRecurrences: null,
+            isRecurring: _isRecurring,
+            recurrenceNumber: _isRecurring ? existing.recurrenceNumber : null,
+            totalRecurrences: _isRecurring
+                ? (existing.totalRecurrences ?? _fixedRecurrenceMonths)
+                : null,
             recurrenceGroupId: null,
           ),
         );
@@ -585,7 +570,6 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           description: _descController.text,
           categoryId: categoryId,
           firstDate: _resolveFirstScheduledDate(baseDate),
-          groupId: _buildGroupId(),
         );
       } else {
         await TransactionService.insert(
@@ -663,6 +647,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                         setState(() {
                           _type = TransactionType.income;
                           _isInstallment = false;
+                          _isRecurring = false;
                           selectedCategoryId = null;
                         });
                         loadCategories();
@@ -914,21 +899,12 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
               ],
 
               if (_isRecurring) ...[
-                TextField(
-                  controller: _recurrenceController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Meses ativos',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Serão criadas 12 transações mensais individuais.',
+                    style: TextStyle(fontSize: 12, color: Colors.black54),
                   ),
-                  onChanged: (value) {
-                    final parsed = int.tryParse(value);
-                    if (parsed != null && parsed > 0) {
-                      setState(() => _recurrenceMonths = parsed);
-                    }
-                  },
                 ),
                 const SizedBox(height: 25),
               ],

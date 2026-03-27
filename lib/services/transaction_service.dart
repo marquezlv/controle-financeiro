@@ -56,4 +56,16 @@ class TransactionService {
       whereArgs: [groupId, groupId],
     );
   }
+
+  static Future<int> deleteRecurringFromDate(
+    String groupId,
+    DateTime fromDate,
+  ) async {
+    final db = await DatabaseHelper.instance.database;
+    return await db.delete(
+      'transactions',
+      where: 'recurrenceGroupId = ? AND date >= ?',
+      whereArgs: [groupId, fromDate.toIso8601String().substring(0, 10)],
+    );
+  }
 }

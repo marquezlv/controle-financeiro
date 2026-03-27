@@ -250,7 +250,7 @@ class _SuspenseMenuDrawerState extends State<SuspenseMenuDrawer> {
                       const Divider(height: 1),
                       ListTile(
                         leading: const Icon(Icons.playlist_add_check_rounded),
-                        title: const Text('Lista Temporaria'),
+                        title: const Text('Suas Listas'),
                         onTap: _openTemporaryList,
                       ),
                     ],

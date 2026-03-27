@@ -64,8 +64,15 @@ class ExpenseScreenState extends State<ExpenseScreen> {
   }
 
   Future<void> _deleteTransaction(TransactionModel transaction) async {
-    if (transaction.sequenceGroupId != null) {
-      await TransactionService.deleteGroup(transaction.sequenceGroupId!);
+    if (transaction.installmentGroupId != null &&
+        !transaction.isRecurringEntry) {
+      await TransactionService.deleteGroup(transaction.installmentGroupId!);
+    } else if (transaction.isRecurring &&
+        transaction.recurrenceGroupId != null) {
+      await TransactionService.deleteRecurringFromDate(
+        transaction.recurrenceGroupId!,
+        transaction.date,
+      );
     } else if (transaction.id != null) {
       await TransactionService.delete(transaction.id!);
     }
