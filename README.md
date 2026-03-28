@@ -69,8 +69,6 @@ app-release.apk
 3. Install dependencies flutter pub get
 4. Run the project flutter run
 
-## 📂 Project Structure
-
 ## 📁 Project Structure
 
 ```text
