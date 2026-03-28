@@ -71,27 +71,27 @@ app-release.apk
 
 ## 📂 Project Structure
 
-lib/
-├── core/
-│   └── database/
-│       ├── migrations/
-│       └── tables/
-├── models/
-├── navigation/
-├── screens/
-├── services/
-├── utils/
-└── widgets/
-    ├── category/
-    ├── charts/
-    ├── dialogs/
-    ├── expense/
-    ├── home/
-    ├── income/
-    ├── organization/
-    ├── project/
-    ├── shared/
-    └── transaction/
+├───core
+│   ├───database
+│   │   ├───migrations
+│   │   └───tables
+│   └───theme
+├───models
+├───navigation
+├───screens
+├───services
+├───utils
+└───widgets
+    ├───category
+    ├───charts
+    ├───dialogs
+    ├───expense
+    ├───home
+    ├───income
+    ├───organization
+    ├───project
+    ├───shared
+    └───transaction
 
 ---
 
