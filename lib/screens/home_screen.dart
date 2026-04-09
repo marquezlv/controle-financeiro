@@ -243,6 +243,8 @@ class HomeScreenState extends State<HomeScreen> {
                     _buildBalanceCard(),
                     const SizedBox(height: 20),
                     _buildIncomeExpenseRow(),
+                    const SizedBox(height: 10),
+                    _buildMonthlyBalanceCard(),
                     if (_showYearView) ...[
                       const SizedBox(height: 20),
                       YearBarChart(
@@ -298,6 +300,18 @@ class HomeScreenState extends State<HomeScreen> {
       gradient: const LinearGradient(
         colors: [Color(0xFF2F6BFF), Color(0xFF1E4ED8)],
       ),
+    );
+  }
+
+  Widget _buildMonthlyBalanceCard() {
+    final monthlyBalance = _totalIncome - _totalExpense;
+    final isPositive = monthlyBalance >= 0;
+    return AmountCard(
+      title: _showYearView ? 'Saldo esse ano' : 'Saldo esse mês',
+      amount: formatCurrencyForCode(monthlyBalance, _currencyCode),
+      backgroundColor: Colors.white,
+      amountColor: isPositive ? Colors.green : Colors.red,
+      amountFontSize: 20,
     );
   }
 

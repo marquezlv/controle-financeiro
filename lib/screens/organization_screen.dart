@@ -87,6 +87,11 @@ class OrganizationScreenState extends State<OrganizationScreen> {
           t.totalInstallments! > maxInstallments) {
         maxInstallments = t.totalInstallments!;
       }
+
+      if (t.totalRecurrences != null &&
+          t.totalRecurrences! > maxInstallments) {
+        maxInstallments = t.totalRecurrences!;
+      }
     }
 
     setState(() {

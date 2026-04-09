@@ -511,6 +511,312 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     }
   }
 
+  Widget _buildCategorySelector() {
+    Map<String, dynamic>? selectedCat;
+    if (selectedCategoryId != null) {
+      final found = categories.where((c) {
+        final id =
+            c['id'] is int ? c['id'] : int.tryParse(c['id']?.toString() ?? '');
+        return id == selectedCategoryId;
+      });
+      if (found.isNotEmpty) selectedCat = found.first;
+    }
+
+    return InputDecorator(
+      decoration: InputDecoration(
+        labelText: 'Categoria',
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      ),
+      child: InkWell(
+        onTap: _showCategoryPicker,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            children: [
+              if (selectedCat != null) ...[
+                Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: Color(
+                      selectedCat['color'] is int
+                          ? selectedCat['color'] as int
+                          : int.tryParse(
+                                selectedCat['color']?.toString() ?? '',
+                              ) ??
+                                0xFF2196F3,
+                    ),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    selectedCat['name']?.toString() ?? '',
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                ),
+              ] else ...[
+                Expanded(
+                  child: Text(
+                    'Selecionar categoria',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ),
+              ],
+              const Icon(Icons.arrow_drop_down, color: Colors.grey),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showCategoryPicker() async {
+    var sheetCategories = List<Map<String, dynamic>>.from(categories);
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            Future<void> reloadSheetCategories() async {
+              final data = await CategoryService.getByType(_type.name);
+              setSheetState(() => sheetCategories = data);
+              await loadCategories();
+            }
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(ctx).size.height * 0.7,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Center(
+                        child: Text(
+                          'Selecionar categoria',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Flexible(
+                        child: sheetCategories.isEmpty
+                            ? const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(16),
+                                  child: Text(
+                                    'Nenhuma categoria criada ainda.',
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
+                                ),
+                              )
+                            : ListView.builder(
+                                shrinkWrap: true,
+                                itemCount: sheetCategories.length,
+                                itemBuilder: (ctx, i) {
+                                  final cat = sheetCategories[i];
+                                  final rawId = cat['id'];
+                                  final catId = rawId is int
+                                      ? rawId
+                                      : int.tryParse(
+                                              rawId?.toString() ?? '',
+                                            ) ??
+                                            0;
+                                  final rawColor = cat['color'];
+                                  final colorValue = rawColor is int
+                                      ? rawColor
+                                      : int.tryParse(
+                                              rawColor?.toString() ?? '',
+                                            ) ??
+                                            0xFF2196F3;
+                                  final catName =
+                                      cat['name']?.toString() ?? '';
+                                  final isSelected =
+                                      catId == selectedCategoryId;
+
+                                  return ListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    onTap: () {
+                                      setState(
+                                        () => selectedCategoryId = catId,
+                                      );
+                                      Navigator.pop(ctx);
+                                    },
+                                    leading: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        SizedBox(
+                                          width: 18,
+                                          child: isSelected
+                                              ? const Icon(
+                                                  Icons.check,
+                                                  color: Colors.blue,
+                                                  size: 18,
+                                                )
+                                              : null,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          width: 12,
+                                          height: 12,
+                                          decoration: BoxDecoration(
+                                            color: Color(colorValue),
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    title: Text(
+                                      catName,
+                                      style: TextStyle(
+                                        fontWeight: isSelected
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                      ),
+                                    ),
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.edit_outlined,
+                                            size: 20,
+                                          ),
+                                          tooltip: 'Editar',
+                                          onPressed: () async {
+                                            final updatedId =
+                                                await AddCategorySheet.show(
+                                                  ctx,
+                                                  initialName: catName,
+                                                  initialColor: colorValue,
+                                                  categoryId: catId,
+                                                  type: _type.name,
+                                                );
+                                            if (updatedId != null) {
+                                              await reloadSheetCategories();
+                                            }
+                                          },
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.delete_outline,
+                                            size: 20,
+                                            color: Colors.red,
+                                          ),
+                                          tooltip: 'Deletar',
+                                          onPressed: () async {
+                                            final confirm =
+                                                await showDialog<bool>(
+                                                  context: ctx,
+                                                  builder:
+                                                      (dialogCtx) =>
+                                                          AlertDialog(
+                                                            title: const Text(
+                                                              'Deletar categoria',
+                                                            ),
+                                                            content: Text(
+                                                              'Deseja deletar a categoria "$catName"?',
+                                                            ),
+                                                            actions: [
+                                                              TextButton(
+                                                                onPressed: () =>
+                                                                    Navigator.pop(
+                                                                      dialogCtx,
+                                                                      false,
+                                                                    ),
+                                                                child: const Text(
+                                                                  'Cancelar',
+                                                                ),
+                                                              ),
+                                                              TextButton(
+                                                                onPressed: () =>
+                                                                    Navigator.pop(
+                                                                      dialogCtx,
+                                                                      true,
+                                                                    ),
+                                                                child: const Text(
+                                                                  'Deletar',
+                                                                  style: TextStyle(
+                                                                    color:
+                                                                        Colors
+                                                                            .red,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                );
+                                            if (confirm == true) {
+                                              await CategoryService.delete(
+                                                catId,
+                                              );
+                                              if (selectedCategoryId ==
+                                                  catId) {
+                                                setState(
+                                                  () =>
+                                                      selectedCategoryId =
+                                                          null,
+                                                );
+                                              }
+                                              await reloadSheetCategories();
+                                            }
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.add),
+                          label: const Text('Nova categoria'),
+                          onPressed: () async {
+                            final newId = await AddCategorySheet.show(
+                              ctx,
+                              type: _type.name,
+                            );
+                            if (newId != null) {
+                              await reloadSheetCategories();
+                              setState(() => selectedCategoryId = newId);
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _save() async {
     if (_valueController.text.isEmpty) return;
     final value = parseCurrencyInput(_valueController.text);
@@ -704,119 +1010,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
               const SizedBox(height: 15),
 
-              Row(
-                children: [
-                  Expanded(
-                    child: DropdownButtonFormField<int>(
-                      initialValue:
-                          categories.any((category) {
-                            final rawId = category['id'];
-                            final catId = rawId is int
-                                ? rawId
-                                : int.tryParse(rawId?.toString() ?? '');
-                            return catId == selectedCategoryId;
-                          })
-                          ? selectedCategoryId
-                          : null,
-                      decoration: InputDecoration(
-                        labelText: 'Categoria',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      items: [
-                        ...categories.map((category) {
-                          final rawColor = category['color'];
-                          final colorValue = rawColor is int
-                              ? rawColor
-                              : int.tryParse(rawColor?.toString() ?? '') ??
-                                    0xFF2196F3;
-                          final rawId = category['id'];
-                          final catId = rawId is int
-                              ? rawId
-                              : int.tryParse(rawId?.toString() ?? '') ?? 0;
-                          return DropdownMenuItem<int>(
-                            value: catId,
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 12,
-                                  height: 12,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Color(colorValue),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Text(category['name'] as String),
-                              ],
-                            ),
-                          );
-                        }),
-                        DropdownMenuItem<int>(
-                          value: -1,
-                          child: Row(
-                            children: const [
-                              Icon(Icons.add, size: 18),
-                              SizedBox(width: 10),
-                              Text('Adicionar categoria'),
-                            ],
-                          ),
-                        ),
-                      ],
-                      onChanged: (value) async {
-                        if (value == null) return;
-                        if (value == -1) {
-                          final newId = await AddCategorySheet.show(
-                            context,
-                            type: _type.name,
-                          );
-                          if (newId != null) {
-                            await loadCategories();
-                            setState(() => selectedCategoryId = newId);
-                          }
-                          return;
-                        }
-                        setState(() => selectedCategoryId = value);
-                      },
-                    ),
-                  ),
-                  if (selectedCategoryId != null)
-                    IconButton(
-                      icon: const Icon(Icons.edit),
-                      tooltip: 'Editar categoria',
-                      onPressed: () async {
-                        final selected = categories.firstWhere((c) {
-                          final id = c['id'] is int
-                              ? c['id']
-                              : int.tryParse(c['id']?.toString() ?? '');
-                          return id == selectedCategoryId;
-                        }, orElse: () => {});
-                        if (selected.isEmpty) return;
-
-                        final rawColor = selected['color'];
-                        final colorValue = rawColor is int
-                            ? rawColor
-                            : int.tryParse(rawColor?.toString() ?? '') ??
-                                  0xFF2196F3;
-                        final name = selected['name']?.toString() ?? '';
-
-                        final updatedId = await AddCategorySheet.show(
-                          context,
-                          initialName: name,
-                          initialColor: colorValue,
-                          categoryId: selectedCategoryId,
-                          type: _type.name,
-                        );
-
-                        if (updatedId != null) {
-                          await loadCategories();
-                          setState(() => selectedCategoryId = updatedId);
-                        }
-                      },
-                    ),
-                ],
-              ),
+              _buildCategorySelector(),
 
               const SizedBox(height: 15),
 

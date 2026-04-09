@@ -33,6 +33,11 @@ class CategoryService {
     );
   }
 
+  static Future<int> delete(int id) async {
+    final db = await DatabaseHelper.instance.database;
+    return await db.delete('categories', where: 'id = ?', whereArgs: [id]);
+  }
+
   static Future<int> getOrCreate(String name, String type) async {
     final db = await DatabaseHelper.instance.database;
     final existing = await db.query(
